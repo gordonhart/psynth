@@ -37,8 +37,7 @@ pub fn server(config: &cpal::StreamConfig) -> Result<Box<FnMut(&mut [f32]) + Sen
 
     let mut get_next_value = move || {
         if buffer.len() < PADDING {
-            // let new = match socket.recv_bytes(zmq::DONTWAIT) {
-            let new = match socket.recv_bytes(0) {
+            let new = match socket.recv_bytes(zmq::DONTWAIT) {
                 Ok(v) => v,
                 Err(zmq::Error::EAGAIN) => Vec::new(),
                 Err(e) => panic!("recv panicked: {:?}",  e),
