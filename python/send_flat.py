@@ -28,5 +28,5 @@ if __name__ == "__main__":
     # manual sleep because zmq doesn't handle short-lived sockets as expected
     time.sleep(0.25)
     for _ in range(20):
-        socket.send(flat_tone(440, n_samples=int(3e4)))
+        socket.send(flat_tone(440))
         time.sleep(1 / (48000 / 2048 + 10))

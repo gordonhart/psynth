@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use psynth::generators::{flat, server};
+use psynth::generators;
 
 
 fn main() -> Result<()> {
@@ -15,8 +15,9 @@ fn main() -> Result<()> {
 
     let stream = device.build_output_stream(
         &config,
-        // flat(&config, 1000.0),
-        server(&config)?,
+        // generators::flat(&config, 1000.0),
+        // generators::sub_server_single(&config)?,
+        generators::sub_server_multi(&config, 5)?,
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     stream.play()?;
