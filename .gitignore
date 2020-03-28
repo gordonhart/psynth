@@ -1,0 +1,7 @@
+# editor swapfiles
+*.swo
+*.swp
+
+# rust artifacts
+/target
+**/*.rs.bk
