@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 use anyhow::Result;
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use crate::write_data;
 
@@ -8,6 +10,7 @@ pub fn flat(
     config: &cpal::StreamConfig,
     frequency: f32,
 ) -> impl FnMut(&mut [f32]) + Send + 'static {
+
     let sample_rate = config.sample_rate.0 as f32;
     println!("sample rate: {}", sample_rate);
     let channels = config.channels as usize;
@@ -23,7 +26,10 @@ pub fn flat(
 }
 
 
-pub fn server(config: &cpal::StreamConfig) -> Result<Box<FnMut(&mut [f32]) + Send + 'static>> {
+pub fn server(
+    config: &cpal::StreamConfig
+) -> Result<Box<FnMut(&mut [f32]) + Send + 'static>> {
+
     let channels = config.channels as usize;
 
     let ctx = zmq::Context::new();
@@ -31,32 +37,32 @@ pub fn server(config: &cpal::StreamConfig) -> Result<Box<FnMut(&mut [f32]) + Sen
     socket.set_subscribe(&[])?;
     socket.connect("ipc:///tmp/.psynth.0")?;
 
-    const MAXSIZE: usize = 8192;
+    // NOTE: when large packets (> ~100KB) are received, this function takes too long to produce
+    // the next note smoothly
     const PADDING: usize = 1024;
-    let mut buffer: Vec<u8> = Vec::new();
+    let mut buffer: VecDeque<f32> = VecDeque::new();
 
     let mut get_next_value = move || {
         if buffer.len() < PADDING {
-            let new = match socket.recv_bytes(zmq::DONTWAIT) {
-                Ok(v) => v,
-                Err(zmq::Error::EAGAIN) => Vec::new(),
+            match socket.recv_bytes(zmq::DONTWAIT) {
+                Ok(new) => {
+                    let new_len = new.len();
+                    println!("received {} bytes", new_len);
+                    if new_len % 4 != 0 {
+                        eprintln!("WARNING: ignoring trailing {} bytes that do not align", new_len % 4);
+                    }
+                    if buffer.len() + new_len > buffer.capacity() {
+                        buffer.reserve(buffer.len() + new_len - buffer.capacity());
+                    }
+                    for i in 0 .. new_len / 4 {
+                        buffer.push_back(BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]));
+                    };
+                },
+                Err(zmq::Error::EAGAIN) => (),
                 Err(e) => panic!("recv panicked: {:?}",  e),
-            };
-            if new.len() > 0 {
-                println!("read {}", new.len());
-                buffer.extend_from_slice(&new[..]);
             }
         }
-        if buffer.len() > 3 {
-            // let val = f32::from_be_bytes(&buffer[ptr..ptr+4]);
-            let bytes = buffer.drain(..4).collect::<Vec<u8>>();
-            // println!("bytes: {:?}", bytes);
-            let val = (&bytes[..]).read_f32::<BigEndian>().unwrap();
-            // println!("sending: {}", val);
-            val
-        } else {
-            0.0
-        }
+        buffer.pop_front().unwrap_or(0.0)
     };
 
     Ok(Box::new(move |data: &mut [f32]| write_data(data, channels, &mut get_next_value)))
