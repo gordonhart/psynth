@@ -3,6 +3,11 @@ name = "psynth"
 version = "0.1.0"
 authors = ["Gordon Hart <gordon.hart2@gmail.com>"]
 edition = "2018"
+repository = "https://github.com/gordonhart/psynth"
+license = "BSD-3-Clause"
 
 [dependencies]
-cpal = "0.11.0"
+anyhow = "1.0"
+# still quite nascent -- the latest release 0.11.0 doesn't contain some needed
+# changes that live unreleased on master
+cpal = { git = "https://github.com/RustAudio/cpal" }
