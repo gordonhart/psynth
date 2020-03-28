@@ -6,6 +6,15 @@ edition = "2018"
 repository = "https://github.com/gordonhart/psynth"
 license = "BSD-3-Clause"
 
+[lib]
+name = "psynth"
+path = "src/lib.rs"
+crate-type = ["rlib", "dylib"]
+
+[[bin]]
+name = "psynth-play"
+path = "src/bin/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 # still quite nascent -- the latest release 0.11.0 doesn't contain some needed
