@@ -26,3 +26,26 @@ pub type Filter = Box<dyn FnMut(&mut Generator) -> Sample + Send>;
 /// Calls the `Generator` repeatedly to generate the audio stream them does some implementation-
 /// specific processing on the data.
 pub type Consumer = Box<dyn FnMut(&mut Generator, &mut [Sample]) + Send>;
+
+
+/// Consume `self` and the provided `Filter` to create a new `Generator` with the filter applied.
+///
+/// Exists to provide a better interface to `filters::compose`, enabling the builder pattern:
+///
+/// ```rust
+/// use psynth::{Composable, Generator, filters, generators};
+/// let config = cpal::StreamConfig { channels: 1, sample_rate: cpal::SampleRate(44100) };
+/// let mut gen: Generator = generators::flat(&config, 440.0)
+///     .compose(filters::warble(&config, 1.0))
+///     .compose(filters::warble(&config, 2.0));
+/// ```
+pub trait Composable {
+    fn compose(self, filter: Filter) -> Generator;
+}
+
+
+impl Composable for Generator {
+    fn compose(self, filter: Filter) -> Generator {
+        filters::compose(self, filter)
+    }
+}

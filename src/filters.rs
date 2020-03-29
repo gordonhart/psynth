@@ -10,6 +10,10 @@ pub fn compose(mut generator: Generator, mut filter: Filter) -> Generator {
 
 
 /// Sinusoidally attenuate the volume of the output with the provided period.
+///
+/// Note that this travels through the entire range of the sinusoid (-1, 1) on a given period,
+/// meaning that the heard effect here is a warbling with period double that of the provided
+/// `period`.
 pub fn warble(
     config: &cpal::StreamConfig,
     period: f32,
@@ -22,10 +26,7 @@ pub fn warble(
     Box::new(move |generator: &mut Generator| {
         x = (x + 1.0) % (sample_rate * period);
         let original_value = generator();
-        let amplitude_modulation = {
-            let raw_mod = ((2.0 * PI * x) / (sample_rate * period)).sin();
-            (raw_mod + 1.0) / 2.0
-        };
+        let amplitude_modulation = ((2.0 * PI * x) / (sample_rate * period)).sin();
         original_value * amplitude_modulation
     })
 }
