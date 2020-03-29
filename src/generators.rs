@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 use std::thread;
-use std::time::Duration;
 use std::sync::mpsc;
 
 use anyhow::Result;
@@ -101,38 +100,59 @@ pub fn sub_server_multi(
         sockets.push(socket);
     }
 
+    const BUFSIZE: usize = 10_000;
+    let (sender, receiver) = mpsc::sync_channel(BUFSIZE);
+
     // NOTE: when large packets (> ~100KB) are received, this function takes too long to produce
     // the next note smoothly
-    const PADDING: usize = 1024;
     let mut buffer: VecDeque<f32> = VecDeque::new();
+    thread::spawn(move || {
 
-    let mut get_next_value = move || {
-        // TODO: PollItem is !Send + !Sync, how to access within this closure without recreating
-        // every time this is called?
+        // NOTE: must be created within the threaed because `PollItem` is !Send + !Sync
         let mut poll_items = sockets
             .iter()
             .map(|socket| socket.as_poll_item(zmq::PollEvents::POLLIN))
             .collect::<Vec<PollItem>>();
-        if buffer.len() < PADDING {
+
+        loop {
             match zmq::poll(&mut poll_items[..], 0) {
                 Ok(0) => (),
-                Ok(n) => {
+
+                // new data: at least one socket is ready to yield data
+                Ok(_) => {
                     for (socket, poller) in sockets.iter().zip(poll_items.iter()) {
                         if !poller.is_readable() {
                             continue;
                         }
                         let new = socket.recv_bytes(zmq::DONTWAIT).expect("missing message?");
                         for i in 0 .. new.len() / 4 {
-                            buffer.push_back(BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]));
+                            let new_value = BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]);
+                            match buffer.get_mut(i) {
+                                Some(v) => *v += new_value,
+                                None => buffer.push_back(new_value),
+                            }
                         }
                     }
                 },
 
                 Err(e) => panic!("poll panicked: {:?}",  e),
             }
+            'sending: loop {
+                match buffer.pop_front() {
+                    Some(to_send) => {
+                match sender.try_send(to_send) {
+                    Ok(()) => {},
+                    Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                        buffer.push_front(to_send);
+                        break 'sending;
+                    },
+                    Err(e) => panic!("failed to send on channel: {:?}", e),
+                }
+                }, None => break 'sending,
+            }}
         }
-        buffer.pop_front().unwrap_or(0.0)
-    };
+    });
 
+    let mut get_next_value = move || receiver.try_recv().unwrap_or(0.0);
     Ok(Box::new(move |data: &mut [f32]| write_data(data, channels, &mut get_next_value)))
 }
