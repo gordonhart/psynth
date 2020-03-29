@@ -13,10 +13,11 @@ fn main() -> Result<()> {
     let config: cpal::StreamConfig = config_supported.into();
     println!("default config: {:?}", config);
 
+    let mut sub_server = generators::sub_server(0)?;
+    let channels = config.channels as usize;
     let stream = device.build_output_stream(
         &config,
-        // generators::flat(&config, 1000.0),
-        generators::sub_server(&config, 0)?,
+        move |data: &mut [f32]| generators::write_data(data, channels, &mut sub_server),
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     stream.play()?;
