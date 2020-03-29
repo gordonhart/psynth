@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use psynth::{generators, filters, consumers, Composable};
+use psynth::{generators, filters, consumers, FilterComposable, Sample, Observer};
 
 
 fn main() -> Result<()> {
@@ -21,9 +21,13 @@ fn main() -> Result<()> {
         .compose(filters::warble(&config, 3.0))
         .compose(filters::warble(&config, 4.0));
 
+    let observers: Vec<Box<dyn Observer + Send>> = vec![Box::new(std::io::stdout())];
+    let mut consumer = consumers::write_output_stream_mono_with_observers(channels, observers);
+
     let stream = device.build_output_stream(
         &config,
-        move |obuf: &mut [f32]| consumers::write_output_stream_mono(channels)(&mut gen, obuf),
+        // move |obuf: &mut [Sample]| consumers::write_output_stream_mono(channels)(&mut gen, obuf),
+        move |obuf: &mut [Sample]| consumer(&mut gen, obuf),
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     stream.play()?;

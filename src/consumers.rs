@@ -1,4 +1,4 @@
-use crate::{Sample, Consumer, Generator};
+use crate::{Sample, Consumer, Generator, Observer};
 
 
 /// Write the output stream as generated from the `next_sample` function.
@@ -18,14 +18,19 @@ pub fn write_output_stream_mono(channels: usize) -> Consumer {
 }
 
 
-/// `Consumer` implementation that dumps the data to `stdout`.
-// TODO: not crazy about requiring an output buffer be passed in here -- is it possible to change
-// the signature of `Consumer` to not assume anything about the consumer (i.e. that it needs/wants
-// an output buffer?)
-pub fn stdout_dumper() -> Consumer {
+pub fn write_output_stream_mono_with_observers(
+    channels: usize,
+    mut observers: Vec<Box<dyn Observer + Send>>,
+) -> Consumer {
     Box::new(move |generator: &mut Generator, output: &mut [Sample]| {
-        for frame in output.chunks_mut(1) {
-            println!("{}", generator());
+        for frame in output.chunks_mut(channels) {
+            let value = generator();
+            for sample in frame.iter_mut() {
+                *sample = value;
+            }
+            for observer in observers.iter_mut() {
+                observer.sample(value);
+            }
         }
     })
 }
