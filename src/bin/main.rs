@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use psynth::generators;
+use psynth::{generators, filters, consumers};
 
 
 fn main() -> Result<()> {
@@ -13,11 +13,16 @@ fn main() -> Result<()> {
     let config: cpal::StreamConfig = config_supported.into();
     println!("default config: {:?}", config);
 
-    let mut sub_server = generators::sub_server(0)?;
     let channels = config.channels as usize;
+    // let mut gen: generators::Generator = generators::flat(&config, 440.0);
+    // let mut gen: psynth::Generator = generators::sub_server(0)?;
+    let mut gen: psynth::Generator = filters::compose(
+        generators::flat(&config, 440.0),
+        filters::warble(&config, 5.0),
+    );
     let stream = device.build_output_stream(
         &config,
-        move |data: &mut [f32]| generators::write_data(data, channels, &mut sub_server),
+        move |obuf: &mut [f32]| consumers::write_output_stream_mono(channels)(&mut gen, obuf),
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     stream.play()?;
