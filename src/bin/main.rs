@@ -16,8 +16,7 @@ fn main() -> Result<()> {
     let stream = device.build_output_stream(
         &config,
         // generators::flat(&config, 1000.0),
-        // generators::sub_server_single(&config)?,
-        generators::sub_server_multi(&config, 5)?,
+        generators::sub_server(&config, 0)?,
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     stream.play()?;

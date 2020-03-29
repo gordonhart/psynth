@@ -1,10 +1,8 @@
-use std::collections::VecDeque;
 use std::thread;
 use std::sync::mpsc;
 
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder};
-use zmq::{Context, Socket, PollItem};
 
 use crate::write_data;
 
@@ -33,123 +31,38 @@ pub fn flat(
 
 /// Expose a ZMQ SUB interface to play audio streamed from another process.
 ///
-/// Bytes received are interpreted as big-endian-packed 32-bit floats.
-pub fn sub_server_single(
+/// Bytes received are interpreted as big-endian-packed 32-bit floats. All receipt is done on a
+/// background thread and stuffed into a channel, allowing arbitrarily large `recv` packet sizes
+/// without yielding choppy audio.
+pub fn sub_server(
     config: &cpal::StreamConfig,
+    line: u8,
 ) -> Result<Box<dyn FnMut(&mut [f32]) + Send + 'static>> {
 
     let channels = config.channels as usize;
 
-    let ctx = Context::new();
+    let ctx = zmq::Context::new();
     let socket = ctx.socket(zmq::SUB)?;
     socket.set_subscribe(&[])?;
-    socket.connect("ipc:///tmp/.psynth.0")?;
+    let endpoint = format!("ipc:///tmp/.psynth.{}", line);
+    println!("subcribing on '{}'", endpoint);
+    socket.connect(endpoint.as_str())?;
 
-    // NOTE: when large packets (> ~100KB) are received, this function takes too long to produce
-    // the next note smoothly
-    const PADDING: usize = 1024;
-    let mut buffer: VecDeque<f32> = VecDeque::new();
+    let (sender, receiver) = mpsc::channel();
 
-    let mut get_next_value = move || {
-        if buffer.len() < PADDING {
-            match socket.recv_bytes(zmq::DONTWAIT) {
-                Ok(new) => {
-                    let new_len = new.len();
-                    println!("received {} bytes", new_len);
-                    if new_len % 4 != 0 {
-                        eprintln!(
-                            "WARNING: ignoring trailing {} bytes that do not align", new_len % 4
-                        );
-                    }
-                    if buffer.len() + new_len > buffer.capacity() {
-                        buffer.reserve(buffer.len() + new_len - buffer.capacity());
-                    }
-                    for i in 0 .. new_len / 4 {
-                        buffer.push_back(BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]));
-                    }
-                },
-
-                // nothing to read and didn't hold due to DONTWAIT flag -- do nothing
-                Err(zmq::Error::EAGAIN) => (),
-                Err(e) => panic!("recv panicked: {:?}",  e),
-            }
-        }
-        buffer.pop_front().unwrap_or(0.0)
-    };
-
-    Ok(Box::new(move |data: &mut [f32]| write_data(data, channels, &mut get_next_value)))
-}
-
-
-// TODO: connect to multiple endpoints to allow superposition of audio from multiple sources
-pub fn sub_server_multi(
-    config: &cpal::StreamConfig,
-    n_peers: usize,
-) -> Result<Box<dyn FnMut(&mut [f32]) + Send + 'static>> {
-
-    let channels = config.channels as usize;
-
-    let ctx = Context::new();
-
-    let mut sockets: Vec<Socket> = Vec::new();
-    for i in 0 .. n_peers {
-        let socket = ctx.socket(zmq::SUB)?;
-        socket.set_subscribe(&[])?;
-        let endpoint = format!("ipc:///tmp/.psynth.{}", i);
-        socket.connect(endpoint.as_str())?;
-        sockets.push(socket);
-    }
-
-    const BUFSIZE: usize = 10_000;
-    let (sender, receiver) = mpsc::sync_channel(BUFSIZE);
-
-    // NOTE: when large packets (> ~100KB) are received, this function takes too long to produce
-    // the next note smoothly
-    let mut buffer: VecDeque<f32> = VecDeque::new();
-    thread::spawn(move || {
-
-        // NOTE: must be created within the threaed because `PollItem` is !Send + !Sync
-        let mut poll_items = sockets
-            .iter()
-            .map(|socket| socket.as_poll_item(zmq::PollEvents::POLLIN))
-            .collect::<Vec<PollItem>>();
-
-        loop {
-            match zmq::poll(&mut poll_items[..], 0) {
-                Ok(0) => (),
-
-                // new data: at least one socket is ready to yield data
-                Ok(_) => {
-                    for (socket, poller) in sockets.iter().zip(poll_items.iter()) {
-                        if !poller.is_readable() {
-                            continue;
-                        }
-                        let new = socket.recv_bytes(zmq::DONTWAIT).expect("missing message?");
-                        for i in 0 .. new.len() / 4 {
-                            let new_value = BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]);
-                            match buffer.get_mut(i) {
-                                Some(v) => *v += new_value,
-                                None => buffer.push_back(new_value),
-                            }
-                        }
-                    }
-                },
-
-                Err(e) => panic!("poll panicked: {:?}",  e),
-            }
-            'sending: loop {
-                match buffer.pop_front() {
-                    Some(to_send) => {
-                match sender.try_send(to_send) {
-                    Ok(()) => {},
-                    Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                        buffer.push_front(to_send);
-                        break 'sending;
-                    },
-                    Err(e) => panic!("failed to send on channel: {:?}", e),
+    thread::spawn(move || loop {
+        match socket.recv_bytes(0) {
+            Ok(new) => {
+                let new_len = new.len();
+                if new_len % 4 != 0 {
+                    eprintln!("WARN: ignoring trailing {} bytes that do not align", new_len % 4);
                 }
-                }, None => break 'sending,
-            }}
+                for i in 0 .. new_len / 4 {
+                    let new_value = BigEndian::read_f32(&new[i * 4 .. i * 4 + 4]);
+                    sender.send(new_value).expect("channel send failed");
+                }
+            },
+            Err(e) => panic!("recv panicked: {:?}",  e),
         }
     });
 

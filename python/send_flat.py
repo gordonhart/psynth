@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import math
 from threading import Thread
 import time
@@ -21,7 +22,7 @@ def flat_tone(frequency: float, sample_rate: int = 48000, n_samples: int = 2048)
     return packed
 
 
-def connect_and_send(frequency: float, channel: int = 0) -> None:
+def connect_and_send(frequency: float, channel: int = 0, duration: float = 1.0) -> None:
     print("sending %d on channel %d" % (frequency, channel))
     ctx = zmq.Context()
     socket = ctx.socket(zmq.PUB)
@@ -29,16 +30,18 @@ def connect_and_send(frequency: float, channel: int = 0) -> None:
 
     # manual sleep because zmq doesn't handle short-lived sockets as expected
     time.sleep(0.25)
-    for _ in range(20):
+    t_start = time.time()
+    while True:
         socket.send(flat_tone(frequency))
         time.sleep(1 / (48000 / 2048 + 10))
+        if time.time() - t_start > duration:
+            break
 
 
 if __name__ == "__main__":
-    freqs = [440, 1000, 1200]
-    # freqs = [200]
-    threads = [Thread(target=connect_and_send, args=(freq, i)) for i, freq in enumerate(freqs)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    ap = ArgumentParser()
+    ap.add_argument("--frequency", default=440, type=float, help="frequency of tone to play")
+    ap.add_argument("--duration", default=1.0, type=float, help="number of seconds to play")
+    ap.add_argument("--channel", default=0, type=int, help="channel to send tone on")
+    args = ap.parse_args()
+    connect_and_send(args.frequency, args.channel, args.duration)
