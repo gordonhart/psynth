@@ -16,17 +16,20 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     // let mut gen: generators::Generator = generators::flat(&config, 440.0);
     // let mut gen: psynth::Generator = generators::sub_server(0)?;
-    let mut gen: psynth::Generator = generators::sine(&config, 440.0);
-        // .compose(filters::warble(&config, 1.0));
-        // .compose(filters::warble(&config, 3.0))
-        // .compose(filters::warble(&config, 4.0));
+    let mut gen: psynth::Generator = generators::sine(&config, 440.0)
+        .compose(filters::ramp_up(&config, 0.001))
+        // .compose(filters::warble(&config, 1.1))
+        .compose(filters::gain(0.25))
+        .compose(filters::ramp_down(&config, 0.5, 0.01))
+        .compose(filters::comb(&config, 0.25, 0.25))
+        ;
 
     let observers: Vec<Box<dyn Observer + Send>> = vec![Box::new(std::io::stdout())];
-    let mut consumer = consumers::write_output_stream_mono_with_observers(channels, observers);
+    // let mut consumer = consumers::write_output_stream_mono_with_observers(channels, observers);
+    let mut consumer = consumers::write_output_stream_mono(channels);
 
     let stream = device.build_output_stream(
         &config,
-        // move |obuf: &mut [Sample]| consumers::write_output_stream_mono(channels)(&mut gen, obuf),
         move |obuf: &mut [Sample]| consumer(&mut gen, obuf),
         move |err| panic!("audio stream error: {:?}", err),
     )?;
