@@ -3,6 +3,8 @@ use std::sync::mpsc;
 
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder};
+use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
+use ringbuf::RingBuffer;
 
 use crate::Generator;
 
@@ -37,6 +39,79 @@ pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
         sample_clock = (sample_clock + 1.0) % sample_rate;
         let val = frequency * (sample_clock / sample_rate);
         val - val.floor()
+    })
+}
+
+
+/// Spawn the default system input device as a `Generator`.
+pub fn microphone(
+    host: &cpal::Host,
+    output_config: &cpal::StreamConfig,
+) -> Generator {
+
+    let input_device = host
+        .default_input_device()
+        .expect("failed to get default input device");
+
+    let input_config: cpal::StreamConfig = input_device
+        .default_input_config()
+        .expect("failed to get default input config")
+        .into();
+
+    let mut sample_factor: u32 = 1;
+    let (isr, osr) = (input_config.sample_rate.0, output_config.sample_rate.0);
+    if isr < osr {
+        if osr % isr != 0 {
+            unimplemented!(
+                "TODO: handle output sample rate % input sample rate != 0\ninput: {:?}\noutput: {:?}",
+                isr, osr
+            );
+        }
+        sample_factor = osr / isr;
+    } else if input_config.sample_rate.0 > output_config.sample_rate.0 {
+        unimplemented!(
+            "TODO: handle input sample rate > output sample rate\ninput: {:?}\noutput: {:?}",
+            isr, osr
+        );
+    }
+
+    const BUFSIZE: usize = 10_000;
+    let ring = RingBuffer::new(2 * BUFSIZE);
+    let (mut producer, mut consumer) = ring.split();
+
+    thread::spawn(move || {
+        let input_data_fn = move |data: &[f32]| {
+            let mut output_fell_behind = false;
+            for &sample in data {
+                for _ in 0 .. sample_factor {
+                    if producer.push(sample).is_err() {
+                        output_fell_behind = true;
+                    }
+                }
+            }
+            if output_fell_behind {
+                eprintln!("output stream fell behind: try increasing latency");
+            }
+        };
+
+        println!("attempting to build input stream with f32 samples with config: {:?}", input_config);
+        let input_stream = input_device.build_input_stream(
+            &input_config,
+            input_data_fn,
+            move |err| panic!("input stream error: {:?}", err),
+        ).expect("failed to build input stream");
+        input_stream.play().expect("failed to start mic");
+        println!("input stream playing");
+
+        // FIXME: ugly hack to keep this thread alive (and thus the stream running)
+        std::thread::sleep(std::time::Duration::from_secs(u64::max_value()));
+    });
+
+    Box::new(move || {
+        consumer.pop().unwrap_or_else(|| {
+            // eprintln!("input stream fell behind");
+            0.0
+        })
     })
 }
 
