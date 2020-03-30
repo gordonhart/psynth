@@ -8,17 +8,35 @@ use crate::Generator;
 
 
 /// Generate a flat tone of the provided frequency indefinitely.
-///
-/// Taken almost verbatim from `cpal` examples.
-pub fn flat(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-
+pub fn sine(config: &cpal::StreamConfig, frequency: f32) -> Generator {
     let sample_rate = config.sample_rate.0 as f32;
-
     // produce a sinusoid of maximum amplitude
     let mut sample_clock = 0f32;
     Box::new(move || {
         sample_clock = (sample_clock + 1.0) % sample_rate;
         (sample_clock * frequency * 2.0 * std::f32::consts::PI / sample_rate).sin()
+    })
+}
+
+
+/// Generate a square wave tone of the provided frequncy indefinitely.
+pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
+    let mut gen = sine(&config, frequency);
+    Box::new(move || {
+        let value = gen();
+        if value > 0.0 { 1.0 } else { 0.0 }
+    })
+}
+
+
+/// Generate a sawtooth wave of the provided frequncy indefinitely.
+pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
+    let sample_rate = config.sample_rate.0 as f32;
+    let mut sample_clock = 0f32;
+    Box::new(move || {
+        sample_clock = (sample_clock + 1.0) % sample_rate;
+        let val = frequency * (sample_clock / sample_rate);
+        val - val.floor()
     })
 }
 

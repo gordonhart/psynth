@@ -16,10 +16,10 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     // let mut gen: generators::Generator = generators::flat(&config, 440.0);
     // let mut gen: psynth::Generator = generators::sub_server(0)?;
-    let mut gen: psynth::Generator = generators::flat(&config, 440.0)
-        .compose(filters::warble(&config, 1.0))
-        .compose(filters::warble(&config, 3.0))
-        .compose(filters::warble(&config, 4.0));
+    let mut gen: psynth::Generator = generators::sine(&config, 440.0);
+        // .compose(filters::warble(&config, 1.0));
+        // .compose(filters::warble(&config, 3.0))
+        // .compose(filters::warble(&config, 4.0));
 
     let observers: Vec<Box<dyn Observer + Send>> = vec![Box::new(std::io::stdout())];
     let mut consumer = consumers::write_output_stream_mono_with_observers(channels, observers);
