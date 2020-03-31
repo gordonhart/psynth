@@ -3,29 +3,116 @@ use std::sync::mpsc;
 
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder};
+use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
+use ringbuf::RingBuffer;
 
-use crate::write_data;
+use crate::Generator;
 
 
 /// Generate a flat tone of the provided frequency indefinitely.
-///
-/// Taken almost verbatim from `cpal` examples.
-pub fn flat(
-    config: &cpal::StreamConfig,
-    frequency: f32,
-) -> impl FnMut(&mut [f32]) + Send + 'static {
-
+pub fn sine(config: &cpal::StreamConfig, frequency: f32) -> Generator {
     let sample_rate = config.sample_rate.0 as f32;
-    let channels = config.channels as usize;
-
-    // Produce a sinusoid of maximum amplitude.
+    // produce a sinusoid of maximum amplitude
     let mut sample_clock = 0f32;
-    let mut next_value = move || {
+    Box::new(move || {
         sample_clock = (sample_clock + 1.0) % sample_rate;
         (sample_clock * frequency * 2.0 * std::f32::consts::PI / sample_rate).sin()
-    };
+    })
+}
 
-    move |data: &mut [f32]| write_data(data, channels, &mut next_value)
+
+/// Generate a square wave tone of the provided frequncy indefinitely.
+pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
+    let mut gen = sine(&config, frequency);
+    Box::new(move || {
+        let value = gen();
+        if value > 0.0 { 1.0 } else { 0.0 }
+    })
+}
+
+
+/// Generate a sawtooth wave of the provided frequncy indefinitely.
+pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
+    let sample_rate = config.sample_rate.0 as f32;
+    let mut sample_clock = 0f32;
+    Box::new(move || {
+        sample_clock = (sample_clock + 1.0) % sample_rate;
+        let val = frequency * (sample_clock / sample_rate);
+        val - val.floor()
+    })
+}
+
+
+/// Spawn the default system input device as a `Generator`.
+pub fn microphone(
+    host: &cpal::Host,
+    output_config: &cpal::StreamConfig,
+) -> Generator {
+
+    let input_device = host
+        .default_input_device()
+        .expect("failed to get default input device");
+
+    let input_config: cpal::StreamConfig = input_device
+        .default_input_config()
+        .expect("failed to get default input config")
+        .into();
+
+    let mut sample_factor: u32 = 1;
+    let (isr, osr) = (input_config.sample_rate.0, output_config.sample_rate.0);
+    if isr < osr {
+        if osr % isr != 0 {
+            unimplemented!(
+                "TODO: handle output sample rate % input sample rate != 0\ninput: {:?}\noutput: {:?}",
+                isr, osr
+            );
+        }
+        sample_factor = osr / isr;
+    } else if input_config.sample_rate.0 > output_config.sample_rate.0 {
+        unimplemented!(
+            "TODO: handle input sample rate > output sample rate\ninput: {:?}\noutput: {:?}",
+            isr, osr
+        );
+    }
+
+    const BUFSIZE: usize = 10_000;
+    let ring = RingBuffer::new(2 * BUFSIZE);
+    let (mut producer, mut consumer) = ring.split();
+
+    thread::spawn(move || {
+        let input_data_fn = move |data: &[f32]| {
+            let mut output_fell_behind = false;
+            for &sample in data {
+                for _ in 0 .. sample_factor {
+                    if producer.push(sample).is_err() {
+                        output_fell_behind = true;
+                    }
+                }
+            }
+            if output_fell_behind {
+                eprintln!("output stream fell behind: try increasing latency");
+            }
+        };
+
+        println!("attempting to build input stream with f32 samples with config: {:?}", input_config);
+        let input_stream = input_device.build_input_stream(
+            &input_config,
+            input_data_fn,
+            move |err| panic!("input stream error: {:?}", err),
+        ).expect("failed to build input stream");
+        input_stream.play().expect("failed to start mic");
+        println!("input stream playing");
+
+        // FIXME: ugly hack to keep this thread alive (and thus the stream running)
+        std::thread::sleep(std::time::Duration::from_secs(u64::max_value()));
+    });
+
+    Box::new(move || {
+        consumer.pop().unwrap_or_else(|| {
+            // eprintln!("input stream fell behind");
+            0.0
+        })
+    })
 }
 
 
@@ -34,12 +121,7 @@ pub fn flat(
 /// Bytes received are interpreted as big-endian-packed 32-bit floats. All receipt is done on a
 /// background thread and stuffed into a channel, allowing arbitrarily large `recv` packet sizes
 /// without yielding choppy audio.
-pub fn sub_server(
-    config: &cpal::StreamConfig,
-    line: u8,
-) -> Result<Box<dyn FnMut(&mut [f32]) + Send + 'static>> {
-
-    let channels = config.channels as usize;
+pub fn sub_server(line: u8) -> Result<Generator> {
 
     let ctx = zmq::Context::new();
     let socket = ctx.socket(zmq::SUB)?;
@@ -65,7 +147,6 @@ pub fn sub_server(
             Err(e) => panic!("recv panicked: {:?}",  e),
         }
     });
-
-    let mut get_next_value = move || receiver.try_recv().unwrap_or(0.0);
-    Ok(Box::new(move |data: &mut [f32]| write_data(data, channels, &mut get_next_value)))
+    
+    Ok(Box::new(move || receiver.try_recv().unwrap_or(0.0)))
 }
