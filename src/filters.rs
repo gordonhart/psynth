@@ -157,10 +157,62 @@ pub fn all_pass(
 }
 
 
+pub fn parallel(mut filters: Vec<Filter>) -> Filter {
+    Box::new(move |generator: &mut Generator| {
+        let val = generator();
+        let mut out = 0f32;
+        for filter in filters.iter_mut() {
+            // FIXME: reallocating this every time is not great
+            let mut tmp_gen: Generator = Box::new(move || val);
+            out += filter(&mut tmp_gen);
+        }
+        out
+    })
+}
+
+
 pub fn reverb(
     config: &cpal::StreamConfig,
     delay_secs: f32,
     decay_factor: f32,
 ) -> Filter {
-    unimplemented!("{:?}, {:?}, {:?}", config, delay_secs, decay_factor);
+    let mut combs = vec![
+        comb(&config, 0.09999, 0.742, CombDirection::FeedBack),
+        comb(&config, 0.10414, 0.733, CombDirection::FeedBack),
+        comb(&config, 0.11248, 0.715, CombDirection::FeedBack),
+        comb(&config, 0.12085, 0.697, CombDirection::FeedBack),
+    ];
+    /*
+    Box::new(move |generator: &mut Generator| {
+        /* implementation using filter composition:
+        generator
+            .compose(filters::parallel(vec![
+                filters::comb(&config, 0.09999, 0.742, filters::CombDirection::FeedBack),
+                filters::comb(&config, 0.10414, 0.733, filters::CombDirection::FeedBack),
+                filters::comb(&config, 0.11248, 0.715, filters::CombDirection::FeedBack),
+                filters::comb(&config, 0.12085, 0.697, filters::CombDirection::FeedBack),
+            ]))
+            .compose(filters::all_pass(&config, 0.02189, 0.7))
+            .compose(filters::all_pass(&config, 0.00702, 0.7))
+            ()
+        */
+        unimplemented!()
+    })
+    */
+    unimplemented!()
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

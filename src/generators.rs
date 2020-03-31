@@ -75,7 +75,7 @@ pub fn microphone(
         );
     }
 
-    const BUFSIZE: usize = 10_000;
+    const BUFSIZE: usize = 2048;
     let ring = RingBuffer::new(2 * BUFSIZE);
     let (mut producer, mut consumer) = ring.split();
 

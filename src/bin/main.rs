@@ -27,11 +27,29 @@ fn main() -> Result<()> {
         // .compose(filters::comb(&config, 0.10414, 0.733, filters::CombDirection::FeedBack))
         // .compose(filters::comb(&config, 0.11248, 0.715, filters::CombDirection::FeedBack))
         // .compose(filters::comb(&config, 0.12085, 0.697, filters::CombDirection::FeedBack))
+
+        .compose(filters::parallel(vec![
+            filters::comb(&config, 0.09999, 0.742, filters::CombDirection::FeedBack),
+            filters::comb(&config, 0.10414, 0.733, filters::CombDirection::FeedBack),
+            filters::comb(&config, 0.11248, 0.715, filters::CombDirection::FeedBack),
+            filters::comb(&config, 0.12085, 0.697, filters::CombDirection::FeedBack),
+        ]))
+        .compose(filters::all_pass(&config, 0.02189, 0.7))
+        .compose(filters::all_pass(&config, 0.00702, 0.7))
         // .compose(filters::all_pass(&config, 0.02189, 0.7))
         // .compose(filters::comb(&config, 0.15, -0.25, filters::CombDirection::FeedForward))
-        .compose(filters::comb(&config, 0.15, 0.25, filters::CombDirection::FeedBack))
-        .compose(filters::comb(&config, 0.25, 0.25, filters::CombDirection::FeedBack))
-        .compose(filters::comb(&config, 0.50, 0.25, filters::CombDirection::FeedBack))
+
+        // .compose(filters::comb(&config, 0.15, 0.25, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.25, 0.25, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.50, 0.25, filters::CombDirection::FeedBack))
+        /*
+        .compose(filters::parallel(vec![
+            filters::comb(&config, 0.15, 0.25, filters::CombDirection::FeedBack),
+            filters::comb(&config, 0.25, 0.25, filters::CombDirection::FeedBack),
+            filters::comb(&config, 0.50, 0.25, filters::CombDirection::FeedBack),
+        ]))
+        */
+
         // .compose(filters::comb(&config, 0.2, 0.5))
         // .compose(filters::comb(&config, 1.0, 0.1))
         // .compose(filters::warble(&config, 1.0))

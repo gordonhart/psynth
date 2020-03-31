@@ -54,6 +54,7 @@ pub trait FilterComposable {
 
 
 impl FilterComposable for Generator {
+    // fn compose<'a>(&'a mut self, filter: Box<Filter>) -> Box<Generator + 'a> {
     fn compose(self, filter: Filter) -> Generator {
         filters::compose(self, filter)
     }
