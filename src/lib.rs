@@ -30,7 +30,11 @@ pub type Filter = Box<dyn FnMut(Sample) -> Sample + Send>;
 ///
 /// Audio streams are driven by `Consumer`s. The frequency of calls to the generator are determined
 /// by the `Consumer`s need to fill buffers as provided to the `Consumer` by external (`cpal`) code. 
-pub type Consumer = Box<dyn FnMut(Generator) -> Box<dyn FnMut(&mut [Sample]) + Send>>;
+// pub type Consumer = Box<dyn FnMut(Generator) -> Box<dyn FnMut(&mut [Sample]) + Send>>;
+pub trait Consumer: Send {
+    fn bind(self, generator: Generator) -> Self;
+    fn fill(&mut self, output_buffer: &mut [Sample]);
+}
 
 
 pub trait Observer {
