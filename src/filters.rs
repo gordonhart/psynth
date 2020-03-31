@@ -1,12 +1,19 @@
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 
-use crate::{Filter, Generator, FilterComposable};
+use crate::{
+    Sample,
+    Filter,
+    Generator,
+    // FilterComposable,
+};
 
 
 /// Apply the given `Filter` to the given `Generator` and return a `Generator` interface.
+///
+/// Consumes both of the provided arguments.
 pub fn compose(mut generator: Generator, mut filter: Filter) -> Generator {
-    Box::new(move || filter(&mut generator))
+    Box::new(move || filter(generator()))
 }
 
 
@@ -24,19 +31,18 @@ pub fn warble(
     let sample_rate = config.sample_rate.0 as f32;
     let mut x = 0f32;
 
-    Box::new(move |generator: &mut Generator| {
+    Box::new(move |sample: Sample| {
         x = (x + 1.0) % (sample_rate * period);
-        let original_value = generator();
         let amplitude_modulation = ((2.0 * PI * x) / (sample_rate * period)).sin();
-        original_value * amplitude_modulation
+        sample * amplitude_modulation
     })
 }
 
 
 /// Scale the signal by the provided scale factor with clipping at `[-1, 1]`.
 pub fn gain(scale_factor: f32) -> Filter {
-    Box::new(move |generator: &mut Generator| {
-        let val = generator() * scale_factor;
+    Box::new(move |sample: Sample| {
+        let val = sample * scale_factor;
         if val > 1.0 {
             1.0
         } else if val < -1.0 {
@@ -54,11 +60,11 @@ pub fn ramp_up(config: &cpal::StreamConfig, ramp_secs: f32) -> Filter {
     let ramp_steps: f32 = sample_rate * ramp_secs;
     let mut ramp_i = 0f32;
 
-    Box::new(move |generator: &mut Generator| {
+    Box::new(move |sample: Sample| {
         if ramp_i < ramp_steps {
             ramp_i += 1.0;
         }
-        generator() * (ramp_i / ramp_steps)
+        sample * (ramp_i / ramp_steps)
     })
 }
 
@@ -71,8 +77,8 @@ pub fn ramp_down(config: &cpal::StreamConfig, cliff_secs: f32, ramp_secs: f32) -
     let ramp_steps: f32 = sample_rate * ramp_secs;
     let mut ramp_i = 0f32;
 
-    Box::new(move |generator: &mut Generator| {
-        let mut val = generator();
+    Box::new(move |sample: Sample| {
+        let mut val = sample;
         if ramp_i < cliff_steps + ramp_steps {
             ramp_i += 1.0;
         }
@@ -114,19 +120,18 @@ pub fn comb(
     let bufsize = k as usize;
     let mut buf: VecDeque<f32> = VecDeque::from(vec![0.0; bufsize]);
 
-    Box::new(move |generator: &mut Generator| {
-        let mut val = generator();
+    Box::new(move |sample: Sample| {
         match direction {
             CombDirection::FeedForward => {
-                buf.push_back(val);
-                val += decay_factor * buf.pop_front().unwrap_or(0.0);
+                buf.push_back(sample);
+                sample + decay_factor * buf.pop_front().unwrap_or(0.0)
             },
             CombDirection::FeedBack => {
-                val += decay_factor * buf.pop_front().unwrap_or(0.0);
-                buf.push_back(val);
+                let out = sample + decay_factor * buf.pop_front().unwrap_or(0.0);
+                buf.push_back(out);
+                out
             },
-        };
-        val
+        }
     })
 }
 
@@ -138,81 +143,37 @@ pub fn all_pass(
     delay_secs: f32,
     decay_factor: f32,
 ) -> Filter {
-
     let mut comb_forward = comb(config, delay_secs, decay_factor, CombDirection::FeedForward);
     let mut comb_back = comb(config, delay_secs, -decay_factor, CombDirection::FeedBack);
-
-    Box::new(move |generator: &mut Generator| {
-        let val = comb_forward(generator);
-        let mut fakegen: Generator = Box::new(move || val);
-        comb_back(&mut fakegen)
-        // TODO: chain filters together within a filter without needing to allocate
-        /* maybe something like this:
-        generator
-            .compose_ref(&mut comb_forward)
-            .compose_ref(&mut comb_back)
-            ()
-        */
-    })
+    Box::new(move |sample: Sample| comb_back(comb_forward(sample))) 
 }
 
 
+/// Apply the provided `Filter`s and sum the results.
 pub fn parallel(mut filters: Vec<Filter>) -> Filter {
-    Box::new(move |generator: &mut Generator| {
-        let val = generator();
+    Box::new(move |sample: Sample| {
         let mut out = 0f32;
         for filter in filters.iter_mut() {
-            // FIXME: reallocating this every time is not great
-            let mut tmp_gen: Generator = Box::new(move || val);
-            out += filter(&mut tmp_gen);
+            out += filter(sample);
         }
         out
     })
 }
 
 
+// TODO: not hardcode values, actually used provided params
 pub fn reverb(
     config: &cpal::StreamConfig,
     delay_secs: f32,
     decay_factor: f32,
 ) -> Filter {
-    let mut combs = vec![
+    let mut combs = parallel(vec![
         comb(&config, 0.09999, 0.742, CombDirection::FeedBack),
         comb(&config, 0.10414, 0.733, CombDirection::FeedBack),
         comb(&config, 0.11248, 0.715, CombDirection::FeedBack),
         comb(&config, 0.12085, 0.697, CombDirection::FeedBack),
-    ];
-    /*
-    Box::new(move |generator: &mut Generator| {
-        /* implementation using filter composition:
-        generator
-            .compose(filters::parallel(vec![
-                filters::comb(&config, 0.09999, 0.742, filters::CombDirection::FeedBack),
-                filters::comb(&config, 0.10414, 0.733, filters::CombDirection::FeedBack),
-                filters::comb(&config, 0.11248, 0.715, filters::CombDirection::FeedBack),
-                filters::comb(&config, 0.12085, 0.697, filters::CombDirection::FeedBack),
-            ]))
-            .compose(filters::all_pass(&config, 0.02189, 0.7))
-            .compose(filters::all_pass(&config, 0.00702, 0.7))
-            ()
-        */
-        unimplemented!()
-    })
-    */
-    unimplemented!()
+    ]);
+    let mut all_pass_a = all_pass(&config, 0.02189, 0.7);
+    let mut all_pass_b = all_pass(&config, 0.00702, 0.7);
+    Box::new(move |sample: Sample| all_pass_b(all_pass_a(combs(sample))))
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

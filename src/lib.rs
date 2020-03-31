@@ -17,9 +17,10 @@ pub type Generator = Box<dyn FnMut() -> Sample + Send>;
 
 /// Transformation applied to an audio stream.
 ///
-/// A call of a `Filter` calls the connected `Generator`, applies its transformation to the value
-/// received, and returns it.
-pub type Filter = Box<dyn FnMut(&mut Generator) -> Sample + Send>;
+/// A call of a `Filter` applies its transformation to the provided value and returns it. `Filter`s
+/// will usually have some internal data structures allowing them to track the passage of time and
+/// history of inputs and outputs.
+pub type Filter = Box<dyn FnMut(Sample) -> Sample + Send>;
 
 
 /// End consumer of an audio stream.
@@ -27,9 +28,9 @@ pub type Filter = Box<dyn FnMut(&mut Generator) -> Sample + Send>;
 /// Calls the `Generator` repeatedly to generate the audio stream them does some implementation-
 /// specific processing on the data, probably involving packing the provided buffer.
 ///
-/// Audio streams are driven by `Consumers`. The frequency of calls to the generator are determined
+/// Audio streams are driven by `Consumer`s. The frequency of calls to the generator are determined
 /// by the `Consumer`s need to fill buffers as provided to the `Consumer` by external (`cpal`) code. 
-pub type Consumer = Box<dyn FnMut(&mut Generator, &mut [Sample]) + Send>;
+pub type Consumer = Box<dyn FnMut(Generator) -> Box<dyn FnMut(&mut [Sample]) + Send>>;
 
 
 pub trait Observer {
@@ -54,7 +55,6 @@ pub trait FilterComposable {
 
 
 impl FilterComposable for Generator {
-    // fn compose<'a>(&'a mut self, filter: Box<Filter>) -> Box<Generator + 'a> {
     fn compose(self, filter: Filter) -> Generator {
         filters::compose(self, filter)
     }
