@@ -5,6 +5,7 @@ use crate::{
     Sample,
     Filter,
     Generator,
+    Pot,
     // FilterComposable,
 };
 
@@ -40,9 +41,12 @@ pub fn warble(
 
 
 /// Scale the signal by the provided scale factor with clipping at `[-1, 1]`.
-pub fn gain(scale_factor: f32) -> Filter {
+pub fn gain<P>(scale_factor: P) -> Filter
+where
+    P: Pot<f32> + 'static
+{
     Box::new(move |sample: Sample| {
-        let val = sample * scale_factor;
+        let val = sample * scale_factor.read();
         if val > 1.0 {
             1.0
         } else if val < -1.0 {
@@ -164,8 +168,8 @@ pub fn parallel(mut filters: Vec<Filter>) -> Filter {
 // TODO: not hardcode values, actually used provided params
 pub fn reverb(
     config: &cpal::StreamConfig,
-    delay_secs: f32,
-    decay_factor: f32,
+    _delay_secs: f32,
+    _decay_factor: f32,
 ) -> Filter {
     let mut combs = parallel(vec![
         comb(&config, 0.09999, 0.742, CombDirection::FeedBack),

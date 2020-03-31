@@ -5,6 +5,7 @@ use psynth::{
     generators,
     filters,
     consumers,
+    controls,
     Consumer,
     FilterComposable,
     Sample,
@@ -22,11 +23,11 @@ fn main() -> Result<()> {
     println!("default config: {:?}", config);
 
     let channels = config.channels as usize;
-    let mut generator: psynth::Generator =
+    let generator: psynth::Generator =
         generators::sine(&config, 440.0)
         // generators::microphone(&host, &config)
         .compose(filters::ramp_up(&config, 0.01))
-        // .compose(filters::gain(0.1))
+        .compose(filters::gain(controls::TimedSawtoothPot::default()))
         // .compose(filters::ramp_down(&config, 1.0, 0.01))
         .compose(filters::reverb(&config, 0.0, 0.0))
         // .compose(filters::warble(&config, 1.0))

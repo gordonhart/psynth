@@ -2,6 +2,7 @@ pub mod generators;
 pub mod filters;
 pub mod consumers;
 pub mod observers;
+pub mod controls;
 
 
 pub type Sample = f32;
@@ -39,6 +40,11 @@ pub trait Consumer: Send {
 
 pub trait Observer {
     fn sample(&mut self, sample: Sample);
+}
+
+
+pub trait Pot<T>: Send + Sync {
+    fn read(&self) -> T;
 }
 
 

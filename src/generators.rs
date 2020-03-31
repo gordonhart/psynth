@@ -6,17 +6,20 @@ use byteorder::{BigEndian, ByteOrder};
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use ringbuf::RingBuffer;
 
-use crate::Generator;
+use crate::{Generator, Pot};
 
 
 /// Generate a flat tone of the provided frequency indefinitely.
-pub fn sine(config: &cpal::StreamConfig, frequency: f32) -> Generator {
+pub fn sine<P>(config: &cpal::StreamConfig, frequency: P) -> Generator
+where
+    P: Pot<f32> + 'static
+{
     let sample_rate = config.sample_rate.0 as f32;
     // produce a sinusoid of maximum amplitude
     let mut sample_clock = 0f32;
     Box::new(move || {
         sample_clock = (sample_clock + 1.0) % sample_rate;
-        (sample_clock * frequency * 2.0 * std::f32::consts::PI / sample_rate).sin()
+        (sample_clock * frequency.read() * 2.0 * std::f32::consts::PI / sample_rate).sin()
     })
 }
 
