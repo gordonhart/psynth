@@ -23,12 +23,18 @@ fn main() -> Result<()> {
         // .compose(filters::gain(0.1))
         // .compose(filters::ramp_down(&config, 1.0, 0.01))
         // .compose(filters::comb(&config, 0.05, 0.25))
-        .compose(filters::comb(&config, 0.15, 0.25))
-        .compose(filters::comb(&config, 0.25, 0.25))
-        .compose(filters::comb(&config, 0.50, 0.25))
-        .compose(filters::comb(&config, 0.2, 0.5))
-        .compose(filters::comb(&config, 1.0, 0.1))
-        .compose(filters::warble(&config, 1.0))
+        // .compose(filters::comb(&config, 0.09999, 0.742, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.10414, 0.733, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.11248, 0.715, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.12085, 0.697, filters::CombDirection::FeedBack))
+        // .compose(filters::all_pass(&config, 0.02189, 0.7))
+        // .compose(filters::comb(&config, 0.15, -0.25, filters::CombDirection::FeedForward))
+        .compose(filters::comb(&config, 0.15, 0.25, filters::CombDirection::FeedBack))
+        .compose(filters::comb(&config, 0.25, 0.25, filters::CombDirection::FeedBack))
+        .compose(filters::comb(&config, 0.50, 0.25, filters::CombDirection::FeedBack))
+        // .compose(filters::comb(&config, 0.2, 0.5))
+        // .compose(filters::comb(&config, 1.0, 0.1))
+        // .compose(filters::warble(&config, 1.0))
         ;
 
     let _observers: Vec<Box<dyn Observer + Send>> = vec![Box::new(std::io::stdout())];
@@ -41,7 +47,7 @@ fn main() -> Result<()> {
         move |err| panic!("audio stream error: {:?}", err),
     )?;
     output_stream.play()?;
-    std::thread::sleep(std::time::Duration::from_secs(60));
+    std::thread::sleep(std::time::Duration::from_secs(600));
 
     Ok(())
 }

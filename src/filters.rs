@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 
-use crate::{Filter, Generator};
+use crate::{Filter, Generator, FilterComposable};
 
 
 /// Apply the given `Filter` to the given `Generator` and return a `Generator` interface.
@@ -84,15 +84,28 @@ pub fn ramp_down(config: &cpal::StreamConfig, cliff_secs: f32, ramp_secs: f32) -
 }
 
 
+pub enum CombDirection {
+    FeedForward,
+    FeedBack,
+}
 /// [Comb](https://en.wikipedia.org/wiki/Comb_filter) echo filter.
 ///
+/// Feedforward difference equation:
+///
 /// ```text
-/// y(t) = f(t) + a * f(t - k)
+/// y(t) = x(t) + a * x(t - k)
+/// ```
+///
+/// Feedback difference equation:
+///
+/// ```text
+/// y(t) = x(t) + a * y(t - k)
 /// ```
 pub fn comb(
     config: &cpal::StreamConfig,
     delay_secs: f32,
     decay_factor: f32, // decay this much in amplitude each time the delay is repeated
+    direction: CombDirection,
 ) -> Filter {
     let sample_rate = config.sample_rate.0 as f32;
 
@@ -103,9 +116,43 @@ pub fn comb(
 
     Box::new(move |generator: &mut Generator| {
         let mut val = generator();
-        val += decay_factor * buf.pop_front().unwrap_or(0.0);
-        buf.push_back(val);
+        match direction {
+            CombDirection::FeedForward => {
+                buf.push_back(val);
+                val += decay_factor * buf.pop_front().unwrap_or(0.0);
+            },
+            CombDirection::FeedBack => {
+                val += decay_factor * buf.pop_front().unwrap_or(0.0);
+                buf.push_back(val);
+            },
+        };
         val
+    })
+}
+
+
+/// All-pass filter implementation using two Comb filters (FeedForward, FeedBack) of equal delay
+/// and opposite decay in series.
+pub fn all_pass(
+    config: &cpal::StreamConfig,
+    delay_secs: f32,
+    decay_factor: f32,
+) -> Filter {
+
+    let mut comb_forward = comb(config, delay_secs, decay_factor, CombDirection::FeedForward);
+    let mut comb_back = comb(config, delay_secs, -decay_factor, CombDirection::FeedBack);
+
+    Box::new(move |generator: &mut Generator| {
+        let val = comb_forward(generator);
+        let mut fakegen: Generator = Box::new(move || val);
+        comb_back(&mut fakegen)
+        // TODO: chain filters together within a filter without needing to allocate
+        /* maybe something like this:
+        generator
+            .compose_ref(&mut comb_forward)
+            .compose_ref(&mut comb_back)
+            ()
+        */
     })
 }
 
