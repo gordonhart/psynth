@@ -2,6 +2,7 @@ pub mod generators;
 pub mod filters;
 pub mod consumers;
 pub mod observers;
+pub mod controls;
 
 
 pub type Sample = f32;
@@ -17,9 +18,10 @@ pub type Generator = Box<dyn FnMut() -> Sample + Send>;
 
 /// Transformation applied to an audio stream.
 ///
-/// A call of a `Filter` calls the connected `Generator`, applies its transformation to the value
-/// received, and returns it.
-pub type Filter = Box<dyn FnMut(&mut Generator) -> Sample + Send>;
+/// A call of a `Filter` applies its transformation to the provided value and returns it. `Filter`s
+/// will usually have some internal data structures allowing them to track the passage of time and
+/// history of inputs and outputs.
+pub type Filter = Box<dyn FnMut(Sample) -> Sample + Send>;
 
 
 /// End consumer of an audio stream.
@@ -27,13 +29,29 @@ pub type Filter = Box<dyn FnMut(&mut Generator) -> Sample + Send>;
 /// Calls the `Generator` repeatedly to generate the audio stream them does some implementation-
 /// specific processing on the data, probably involving packing the provided buffer.
 ///
-/// Audio streams are driven by `Consumers`. The frequency of calls to the generator are determined
+/// Audio streams are driven by `Consumer`s. The frequency of calls to the generator are determined
 /// by the `Consumer`s need to fill buffers as provided to the `Consumer` by external (`cpal`) code. 
-pub type Consumer = Box<dyn FnMut(&mut Generator, &mut [Sample]) + Send>;
+pub trait Consumer: Send {
+    fn bind(self, generator: Generator) -> Self;
+    fn fill(&mut self, output_buffer: &mut [Sample]);
+}
 
 
+/// Passive observer on the stream received by a `Consumer`.
 pub trait Observer {
     fn sample(&mut self, sample: Sample);
+}
+
+
+/// A potentiometer provides a controllable input to a function.
+pub trait Pot<T>: Send {
+
+    /// Read a value off of the `Pot`.
+    ///
+    /// Note that the reference to `&self` is immutable -- `Pot` implementors shouldn't really be
+    /// modifying themselves based on reads, as that goes against their meatspace namesake, which
+    /// is not altered by the act of reading.
+    fn read(&self) -> T;
 }
 
 
@@ -44,9 +62,9 @@ pub trait Observer {
 /// ```rust
 /// use psynth::{FilterComposable, Generator, filters, generators};
 /// let config = cpal::StreamConfig { channels: 1, sample_rate: cpal::SampleRate(44100) };
-/// let mut gen: Generator = generators::flat(&config, 440.0)
-///     .compose(filters::warble(&config, 1.0))
-///     .compose(filters::warble(&config, 2.0));
+/// let mut gen: Generator = generators::sine(config.sample_rate.0, 440.0)
+///     .compose(filters::gain(0.5))
+///     .compose(filters::offset(2.0));
 /// ```
 pub trait FilterComposable {
     fn compose(self, filter: Filter) -> Generator;

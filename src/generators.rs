@@ -1,29 +1,32 @@
-use std::thread;
+use std::f32::consts::PI;
 use std::sync::mpsc;
+use std::thread;
 
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder};
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use ringbuf::RingBuffer;
 
-use crate::Generator;
+use crate::{Generator, Pot};
 
 
-/// Generate a flat tone of the provided frequency indefinitely.
-pub fn sine(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-    let sample_rate = config.sample_rate.0 as f32;
-    // produce a sinusoid of maximum amplitude
-    let mut sample_clock = 0f32;
+/// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
+pub fn sine<P>(sample_rate: u32, frequency: P) -> Generator
+where
+    P: Pot<f32> + 'static,
+{
+    let rate = sample_rate as f32;
+    let mut t = 0u64;
     Box::new(move || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        (sample_clock * frequency * 2.0 * std::f32::consts::PI / sample_rate).sin()
+        t = t + 1;
+        ((t as f32) * frequency.read() * 2.0 * PI / rate).sin()
     })
 }
 
 
 /// Generate a square wave tone of the provided frequncy indefinitely.
-pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-    let mut gen = sine(&config, frequency);
+pub fn square(sample_rate: u32, frequency: f32) -> Generator {
+    let mut gen = sine(sample_rate, frequency);
     Box::new(move || {
         let value = gen();
         if value > 0.0 { 1.0 } else { 0.0 }
@@ -32,13 +35,28 @@ pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
 
 
 /// Generate a sawtooth wave of the provided frequncy indefinitely.
-pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-    let sample_rate = config.sample_rate.0 as f32;
+pub fn sawtooth(sample_rate: u32, frequency: f32) -> Generator {
+    let rate = sample_rate as f32;
     let mut sample_clock = 0f32;
     Box::new(move || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        let val = frequency * (sample_clock / sample_rate);
+        sample_clock = (sample_clock + 1.0) % rate;
+        let val = frequency * (sample_clock / rate);
         val - val.floor()
+    })
+}
+
+
+/// Add the provided `Generator` streams.
+///
+/// Allows composition of multiple input sources. Serves a similar purpose for `Generator`s as
+/// `filters::parallel` serves for `Filter`s.
+pub fn multi(mut generators: Vec<Generator>) -> Generator {
+    Box::new(move || {
+        let mut out = 0f32;
+        for generator in generators.iter_mut() {
+            out += generator();
+        }
+        out
     })
 }
 
@@ -75,7 +93,7 @@ pub fn microphone(
         );
     }
 
-    const BUFSIZE: usize = 10_000;
+    const BUFSIZE: usize = 2048;
     let ring = RingBuffer::new(2 * BUFSIZE);
     let (mut producer, mut consumer) = ring.split();
 
