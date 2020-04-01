@@ -43,7 +43,7 @@ pub trait Observer {
 }
 
 
-pub trait Pot<T>: Send + Sync {
+pub trait Pot<T>: Send { // + Sync {
     fn read(&self) -> T;
 }
 

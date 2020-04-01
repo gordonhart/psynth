@@ -24,21 +24,31 @@ fn main() -> Result<()> {
 
     let channels = config.channels as usize;
     let generator: psynth::Generator =
-        generators::sine(&config, 440.0)
+        // generators::sine(&config, 440.0)
+        /*
+        generators::sine(&config, controls::TimedSawtoothPot {
+            low: 440.0,
+            high: 1000.0,
+            period: 1.0,
+        })
+        */
+        // generators::sine(&config, controls::SinePot::new(&config, 0.25, 1000.0, 440.0))
+        generators::sine(&config, controls::StdinPot::default())
         // generators::microphone(&host, &config)
         .compose(filters::ramp_up(&config, 0.01))
-        .compose(filters::gain(controls::TimedSawtoothPot::default()))
+        // .compose(filters::gain(controls::TimedSawtoothPot::default()))
+        .compose(filters::gain(0.1))
         // .compose(filters::ramp_down(&config, 1.0, 0.01))
-        .compose(filters::reverb(&config, 0.0, 0.0))
+        // .compose(filters::reverb(&config, 0.0, 0.0))
         // .compose(filters::warble(&config, 1.0))
         ;
 
-    let _observers: Vec<Box<dyn Observer + Send>> = vec![Box::new(std::io::stdout())];
-    // let mut consumer = consumers::write_output_stream_mono_with_observers(channels, observers);
-    // let mut consumer = consumers::write_output_stream_mono(channels)(gen);
+    let observers: Vec<Box<dyn Observer + Send>> = vec![
+        // Box::new(std::io::stdout())
+    ];
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(generator)
-        .bind_observers(_observers)
+        .bind_observers(observers)
         ;
 
     let output_stream = output_device.build_output_stream(

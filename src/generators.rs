@@ -1,5 +1,6 @@
-use std::thread;
+use std::f32::consts::PI;
 use std::sync::mpsc;
+use std::thread;
 
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder};
@@ -9,17 +10,18 @@ use ringbuf::RingBuffer;
 use crate::{Generator, Pot};
 
 
-/// Generate a flat tone of the provided frequency indefinitely.
+/// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
 pub fn sine<P>(config: &cpal::StreamConfig, frequency: P) -> Generator
 where
-    P: Pot<f32> + 'static
+    P: Pot<f32> + 'static,
+    // G: FnMut() -> Sample + Send,
 {
     let sample_rate = config.sample_rate.0 as f32;
-    // produce a sinusoid of maximum amplitude
-    let mut sample_clock = 0f32;
+    let mut t = 0u64;
     Box::new(move || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        (sample_clock * frequency.read() * 2.0 * std::f32::consts::PI / sample_rate).sin()
+        t = t + 1;
+        ((t as f32) * frequency.read() * 2.0 * PI / sample_rate).sin()
+        // (t * frequency.read() * 2.0 * PI).sin()
     })
 }
 
