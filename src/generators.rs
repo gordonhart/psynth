@@ -48,6 +48,21 @@ pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
 }
 
 
+/// Add the provided `Generator` streams.
+///
+/// Allows composition of multiple input sources. Serves a similar purpose for `Generator`s as
+/// `filters::parallel` serves for `Filter`s.
+pub fn multi(mut generators: Vec<Generator>) -> Generator {
+    Box::new(move || {
+        let mut out = 0f32;
+        for generator in generators.iter_mut() {
+            out += generator();
+        }
+        out
+    })
+}
+
+
 /// Spawn the default system input device as a `Generator`.
 pub fn microphone(
     host: &cpal::Host,

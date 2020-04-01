@@ -181,3 +181,14 @@ pub fn reverb(
     let mut all_pass_b = all_pass(&config, 0.00702, 0.7);
     Box::new(move |sample: Sample| all_pass_b(all_pass_a(combs(sample))))
 }
+
+
+/// Offset the provided value by the value retrieved from the held potentiometer.
+///
+/// Useful primarily in composing `Generator`s and `Filter`s as `Pot`s.
+pub fn offset<P>(offset_pot: P) -> Filter
+where
+    P: Pot<Sample> + 'static,
+{
+    Box::new(move |sample: Sample| sample + offset_pot.read())
+}

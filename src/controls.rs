@@ -11,45 +11,29 @@ impl Pot<f32> for f32 {
 }
 
 
-pub struct TimedSawtoothPot {
-    pub low: f32,
-    pub high: f32,
-    pub period: f32,
+/// Modulate the value returned via the held `Generator`.
+///
+/// Useful for composing `Generators` as `Pot` inputs to other `Generator`s or `Filter`s.
+pub struct GeneratorPot {
+    gen: RefCell<Generator>,
 }
 
-
-impl Default for TimedSawtoothPot {
-    fn default() -> Self {
+impl GeneratorPot {
+    pub fn new(generator: Generator) -> Self {
         Self {
-            low: 0.0,
-            high: 1.0,
-            period: 1.0,
+            gen: RefCell::new(generator),
         }
     }
 }
 
-
-impl Pot<f32> for TimedSawtoothPot {
+impl Pot<f32> for GeneratorPot {
     fn read(&self) -> f32 {
-        /*
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("time moved backwards")
-            .subsec_nanos() as f32;
-        ((self.high - self.low) * (ts / 1000000000.0)) + self.low
-        */
-        if std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("time moved backwards")
-            .as_secs() % 2 == 0 {
-            self.low
-        } else {
-            self.high
-        }
+        (&mut *self.gen.borrow_mut())()
     }
 }
 
 
+/// Sinusoidally osciallating potentiometer.
 pub struct SinePot {
     gen: RefCell<Generator>,
     low: f32,
@@ -58,6 +42,8 @@ pub struct SinePot {
 
 
 impl SinePot {
+    /// Crank back and forth at the provided `frequency`, oscillating between the provided `low` and
+    /// `high` values.
     pub fn new<P>(config: &cpal::StreamConfig, frequency: P, low: f32, high: f32) -> Self
     where
         P: Pot<f32> + 'static
@@ -70,22 +56,19 @@ impl SinePot {
     }
 }
 
-
 impl Pot<f32> for SinePot {
     fn read(&self) -> f32 {
         let sin_t = (&mut *self.gen.borrow_mut())();
-        let out = self.low + ((self.high - self.low) * ((1.0 + sin_t) / 2.0));
-        println!("out: {}", out);
-        out
+        self.low + ((self.high - self.low) * ((1.0 + sin_t) / 2.0))
     }
 }
 
 
+/// Interactively read values from stdin via `readline`.
 pub struct StdinPot {
     cur: Cell<f32>,
     receiver: std::sync::mpsc::Receiver<f32>,
 }
-
 
 impl Default for StdinPot {
     fn default() -> Self {
@@ -94,6 +77,7 @@ impl Default for StdinPot {
 }
 
 impl StdinPot {
+    /// Create a new `StdinPot`, spawning a stdin reader thread.
     fn new(name: &str) -> Self {
         let prompt = format!("{}> ", name);
         let mut reader = rustyline::Editor::<()>::new();
@@ -134,6 +118,46 @@ impl Pot<f32> for StdinPot {
                 val
             },
             Err(_) => self.cur.get(),
+        }
+    }
+}
+
+
+// TODO: deprecate in favor of `GeneratorPot` as the general-case solution?
+pub struct TimedSawtoothPot {
+    low: f32,
+    high: f32,
+    _period: f32,
+}
+
+
+impl Default for TimedSawtoothPot {
+    fn default() -> Self {
+        Self {
+            low: 0.0,
+            high: 1.0,
+            _period: 1.0,
+        }
+    }
+}
+
+
+impl Pot<f32> for TimedSawtoothPot {
+    fn read(&self) -> f32 {
+        /*
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("time moved backwards")
+            .subsec_nanos() as f32;
+        ((self.high - self.low) * (ts / 1000000000.0)) + self.low
+        */
+        if std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("time moved backwards")
+            .as_secs() % 2 == 0 {
+            self.low
+        } else {
+            self.high
         }
     }
 }
