@@ -24,6 +24,13 @@ fn main() -> Result<()> {
 
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
+    let left_generator = generators::sine(rate, 200.0)
+        .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0)))
+        .compose(filters::gain(0.5));
+    let right_generator = generators::sine(rate, 250.0)
+        .compose(filters::gain(controls::sine_pot(rate, 1.0 / 2.0, 0.0, 1.0)))
+        .compose(filters::gain(0.5));
+    /*
     let generator: psynth::Generator =
         generators::multi(vec![
             generators::microphone(&host, &config)
@@ -37,13 +44,19 @@ fn main() -> Result<()> {
         .compose(filters::reverb(rate, 0.0, 0.0))
         .compose(filters::gain(0.025))
         ;
+        */
 
     let observers: Vec<Box<dyn Observer + Send>> = vec![
         // Box::new(std::io::stdout())
     ];
+    /*
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(generator)
         .bind_observers(observers)
+        ;
+    */
+    let mut consumer = consumers::StereoConsumer::default()
+        .bind(left_generator, right_generator)
         ;
 
     let output_stream = output_device.build_output_stream(
