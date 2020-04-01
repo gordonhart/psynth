@@ -72,23 +72,27 @@ impl Consumer for MonoConsumer {
 
 /// Consumer capable of packing dual (stereo) audio streams into provided output buffers.
 ///
-/// NOTE: this only works in 2-channel environments and cannot support single-channel or
-/// multi-channel output.
+/// NOTE: if the number of channels is not exactly 2, the behavior defaults to that of the
+/// `MonoConsumer` where each channel has the same data written to it. Here that data is the sum
+/// of the two held streams.
 pub struct StereoConsumer {
+    channels: usize,
     generators: Option<(Generator, Generator)>,
 }
 
 
-impl Default for StereoConsumer {
-    fn default() -> Self {
+impl StereoConsumer {
+    pub fn new(channels: usize) -> Self {
+        if channels != 2 {
+            eprintln!("{} channels provided to `StereoConsumer::new`, should be 2 -- are you sure \
+                you want a `StereoConsumer`?", channels);
+        }
         Self {
+            channels: channels,
             generators: None,
         }
     }
-}
 
-
-impl StereoConsumer {
     pub fn bind(mut self, left: Generator, right: Generator) -> Self {
         self.generators = Some((left, right));
         self
@@ -99,9 +103,16 @@ impl StereoConsumer {
 impl Consumer for StereoConsumer {
     fn fill(&mut self, output_buffer: &mut [Sample]) {
         if let Some((ref mut gen_l, ref mut gen_r)) = &mut self.generators {
-            for frame in output_buffer.chunks_mut(2) {
-                frame[0] = gen_l();
-                frame[1] = gen_r();
+            for frame in output_buffer.chunks_mut(self.channels) {
+                if self.channels == 2 {
+                    frame[0] = gen_l();
+                    frame[1] = gen_r();
+                } else {
+                    let sample = gen_l() + gen_r();
+                    for location in frame.iter_mut() {
+                        *location = sample;
+                    }
+                }
             }
         } else {
             panic!("`StereoConsumer::fill` called but generators have not been bound");
