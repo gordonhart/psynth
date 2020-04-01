@@ -16,6 +16,6 @@ impl Observer for Stdout {
 pub struct WavWriter {}
 impl Observer for WavWriter {
     fn sample(&mut self, sample: Sample) {
-        unimplemented!()
+        unimplemented!("{}", sample)
     }
 }
