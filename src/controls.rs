@@ -1,7 +1,7 @@
 use std::cell::{RefCell, Cell};
 use std::thread;
 
-use crate::{generators, Pot, Generator};
+use crate::{generators, filters, Pot, Generator, FilterComposable};
 
 
 impl Pot<f32> for f32 {
@@ -34,33 +34,18 @@ impl Pot<f32> for GeneratorPot {
 
 
 /// Sinusoidally osciallating potentiometer.
-pub struct SinePot {
-    gen: RefCell<Generator>,
-    low: f32,
-    high: f32,
-}
-
-
-impl SinePot {
-    /// Crank back and forth at the provided `frequency`, oscillating between the provided `low` and
-    /// `high` values.
-    pub fn new<P>(config: &cpal::StreamConfig, frequency: P, low: f32, high: f32) -> Self
-    where
-        P: Pot<f32> + 'static
-    {
-        Self {
-            gen: RefCell::new(generators::sine(config, frequency)),
-            low: low,
-            high: high,
-        }
-    }
-}
-
-impl Pot<f32> for SinePot {
-    fn read(&self) -> f32 {
-        let sin_t = (&mut *self.gen.borrow_mut())();
-        self.low + ((self.high - self.low) * ((1.0 + sin_t) / 2.0))
-    }
+///
+/// Crank back and forth at the provided `frequency`, oscillating between the provided `low` and
+/// `high` values.
+pub fn sine_pot<P>(sample_rate: u32, frequency: P, low: f32, high: f32) -> GeneratorPot
+where
+    P: Pot<f32> + 'static
+{
+    GeneratorPot::new(
+        generators::sine(sample_rate, frequency)
+            .compose(filters::offset(1.0))
+            .compose(filters::gain((high - low) / 2.0))
+            .compose(filters::offset(low)))
 }
 
 
@@ -118,46 +103,6 @@ impl Pot<f32> for StdinPot {
                 val
             },
             Err(_) => self.cur.get(),
-        }
-    }
-}
-
-
-// TODO: deprecate in favor of `GeneratorPot` as the general-case solution?
-pub struct TimedSawtoothPot {
-    low: f32,
-    high: f32,
-    _period: f32,
-}
-
-
-impl Default for TimedSawtoothPot {
-    fn default() -> Self {
-        Self {
-            low: 0.0,
-            high: 1.0,
-            _period: 1.0,
-        }
-    }
-}
-
-
-impl Pot<f32> for TimedSawtoothPot {
-    fn read(&self) -> f32 {
-        /*
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("time moved backwards")
-            .subsec_nanos() as f32;
-        ((self.high - self.low) * (ts / 1000000000.0)) + self.low
-        */
-        if std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("time moved backwards")
-            .as_secs() % 2 == 0 {
-            self.low
-        } else {
-            self.high
         }
     }
 }

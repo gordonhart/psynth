@@ -1,13 +1,7 @@
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 
-use crate::{
-    Sample,
-    Filter,
-    Generator,
-    Pot,
-    // FilterComposable,
-};
+use crate::{Sample, Filter, Generator, Pot};
 
 
 /// Apply the given `Filter` to the given `Generator` and return a `Generator` interface.
@@ -23,45 +17,57 @@ pub fn compose(mut generator: Generator, mut filter: Filter) -> Generator {
 /// Note that this travels through the entire range of the sinusoid (-1, 1) on a given period,
 /// meaning that the heard effect here is a warbling with period double that of the provided
 /// `period`.
-pub fn warble(
-    config: &cpal::StreamConfig,
-    period: f32,
-) -> Filter {
+// TODO: deprecate in favor of pot-actuated gain?
+pub fn warble(sample_rate: u32, period: f32) -> Filter {
 
     // period spans (sample_rate * period) samples
-    let sample_rate = config.sample_rate.0 as f32;
+    let rate = sample_rate as f32;
     let mut x = 0f32;
 
     Box::new(move |sample: Sample| {
-        x = (x + 1.0) % (sample_rate * period);
-        let amplitude_modulation = ((2.0 * PI * x) / (sample_rate * period)).sin();
+        x = (x + 1.0) % (rate * period);
+        let amplitude_modulation = ((2.0 * PI * x) / (rate * period)).sin();
         sample * amplitude_modulation
     })
 }
 
 
-/// Scale the signal by the provided scale factor with clipping at `[-1, 1]`.
+/// Scale the signal by the provided scale factor.
+///
+/// No clipping is performed.
 pub fn gain<P>(scale_factor: P) -> Filter
 where
-    P: Pot<f32> + 'static
+    P: Pot<f32> + 'static,
+{
+    Box::new(move |sample: Sample| sample * scale_factor.read())
+}
+
+
+/// Clip the waveform by thresholding to the range `[low, high]`.
+///
+/// Example usage would be for an 'overdrive' effect that clips at `[-1.0, 1.0]`.
+pub fn clip<P>(low: P, high: P) -> Filter
+where
+    P: Pot<f32> + 'static,
 {
     Box::new(move |sample: Sample| {
-        let val = sample * scale_factor.read();
-        if val > 1.0 {
-            1.0
-        } else if val < -1.0 {
-            -1.0
+        let lo = low.read();
+        let hi = high.read();
+        if sample < lo {
+            lo
+        } else if sample > hi {
+            hi
         } else {
-            val
+            sample
         }
     })
 }
 
 
 /// Ramp gain from zero to one over the specified number of seconds.
-pub fn ramp_up(config: &cpal::StreamConfig, ramp_secs: f32) -> Filter {
-    let sample_rate = config.sample_rate.0 as f32;
-    let ramp_steps: f32 = sample_rate * ramp_secs;
+pub fn ramp_up(sample_rate: u32, ramp_secs: f32) -> Filter {
+    let rate = sample_rate as f32;
+    let ramp_steps: f32 = rate * ramp_secs;
     let mut ramp_i = 0f32;
 
     Box::new(move |sample: Sample| {
@@ -75,10 +81,10 @@ pub fn ramp_up(config: &cpal::StreamConfig, ramp_secs: f32) -> Filter {
 
 /// Ramp the signal to zero after the provided time has elapsed and over the specified number of
 /// seconds.
-pub fn ramp_down(config: &cpal::StreamConfig, cliff_secs: f32, ramp_secs: f32) -> Filter {
-    let sample_rate = config.sample_rate.0 as f32;
-    let cliff_steps = sample_rate * cliff_secs;
-    let ramp_steps: f32 = sample_rate * ramp_secs;
+pub fn ramp_down(sample_rate: u32, cliff_secs: f32, ramp_secs: f32) -> Filter {
+    let rate = sample_rate as f32;
+    let cliff_steps = rate * cliff_secs;
+    let ramp_steps: f32 = rate * ramp_secs;
     let mut ramp_i = 0f32;
 
     Box::new(move |sample: Sample| {
@@ -112,15 +118,15 @@ pub enum CombDirection {
 /// y(t) = x(t) + a * y(t - k)
 /// ```
 pub fn comb(
-    config: &cpal::StreamConfig,
+    sample_rate: u32,
     delay_secs: f32,
     decay_factor: f32, // decay this much in amplitude each time the delay is repeated
     direction: CombDirection,
 ) -> Filter {
-    let sample_rate = config.sample_rate.0 as f32;
+    let rate = sample_rate as f32;
 
     // number of samples until a given sample echoes
-    let k = delay_secs * sample_rate;
+    let k = delay_secs * rate;
     let bufsize = k as usize;
     let mut buf: VecDeque<f32> = VecDeque::from(vec![0.0; bufsize]);
 
@@ -143,12 +149,12 @@ pub fn comb(
 /// All-pass filter implementation using two Comb filters (FeedForward, FeedBack) of equal delay
 /// and opposite decay in series.
 pub fn all_pass(
-    config: &cpal::StreamConfig,
+    sample_rate: u32,
     delay_secs: f32,
     decay_factor: f32,
 ) -> Filter {
-    let mut comb_forward = comb(config, delay_secs, decay_factor, CombDirection::FeedForward);
-    let mut comb_back = comb(config, delay_secs, -decay_factor, CombDirection::FeedBack);
+    let mut comb_forward = comb(sample_rate, delay_secs, decay_factor, CombDirection::FeedForward);
+    let mut comb_back = comb(sample_rate, delay_secs, -decay_factor, CombDirection::FeedBack);
     Box::new(move |sample: Sample| comb_back(comb_forward(sample))) 
 }
 
@@ -167,18 +173,18 @@ pub fn parallel(mut filters: Vec<Filter>) -> Filter {
 
 // TODO: not hardcode values, actually used provided params
 pub fn reverb(
-    config: &cpal::StreamConfig,
+    sample_rate: u32,
     _delay_secs: f32,
     _decay_factor: f32,
 ) -> Filter {
     let mut combs = parallel(vec![
-        comb(&config, 0.09999, 0.742, CombDirection::FeedBack),
-        comb(&config, 0.10414, 0.733, CombDirection::FeedBack),
-        comb(&config, 0.11248, 0.715, CombDirection::FeedBack),
-        comb(&config, 0.12085, 0.697, CombDirection::FeedBack),
+        comb(sample_rate, 0.09999, 0.742, CombDirection::FeedBack),
+        comb(sample_rate, 0.10414, 0.733, CombDirection::FeedBack),
+        comb(sample_rate, 0.11248, 0.715, CombDirection::FeedBack),
+        comb(sample_rate, 0.12085, 0.697, CombDirection::FeedBack),
     ]);
-    let mut all_pass_a = all_pass(&config, 0.02189, 0.7);
-    let mut all_pass_b = all_pass(&config, 0.00702, 0.7);
+    let mut all_pass_a = all_pass(sample_rate, 0.02189, 0.7);
+    let mut all_pass_b = all_pass(sample_rate, 0.00702, 0.7);
     Box::new(move |sample: Sample| all_pass_b(all_pass_a(combs(sample))))
 }
 

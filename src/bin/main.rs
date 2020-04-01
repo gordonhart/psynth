@@ -23,23 +23,24 @@ fn main() -> Result<()> {
     println!("default config: {:?}", config);
 
     let channels = config.channels as usize;
+    let rate: u32 = config.sample_rate.0;
     let generator: psynth::Generator =
         // generators::microphone(&host, &config)
+        /*
         generators::multi(vec![
-            generators::sine(&config, 200.0)
-                .compose(filters::gain(controls::GeneratorPot::new(
-                    generators::sine(&config, 1.0 / 3.0)
-                        .compose(filters::offset(1.0))
-                        .compose(filters::gain(0.5)))))
+            generators::sine(rate, 200.0)
+                .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0)))
                 .compose(filters::gain(0.5)),
-            generators::sine(&config, controls::StdinPot::default())
-                .compose(filters::gain(controls::GeneratorPot::new(
-                    generators::sine(&config, 1.0 / 4.0)
-                        .compose(filters::offset(1.0))
-                        .compose(filters::gain(0.5)))))])
-        .compose(filters::ramp_up(&config, 0.01))
-        .compose(filters::reverb(&config, 0.0, 0.0))
+            generators::sine(rate, controls::StdinPot::default())
+                .compose(filters::gain(controls::sine_pot(rate, 1.0 / 4.0, 0.0, 1.0)))])
+        .compose(filters::ramp_up(rate, 0.01))
+        .compose(filters::reverb(rate, 0.0, 0.0))
         .compose(filters::gain(0.025))
+        */
+        generators::sine(rate, 440.0)
+            .compose(filters::ramp_up(rate, 0.1))
+            .compose(filters::gain(controls::StdinPot::default()))
+            .compose(filters::clip(0.0, 1.0))
         ;
 
     let observers: Vec<Box<dyn Observer + Send>> = vec![

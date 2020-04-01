@@ -11,24 +11,22 @@ use crate::{Generator, Pot};
 
 
 /// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
-pub fn sine<P>(config: &cpal::StreamConfig, frequency: P) -> Generator
+pub fn sine<P>(sample_rate: u32, frequency: P) -> Generator
 where
     P: Pot<f32> + 'static,
-    // G: FnMut() -> Sample + Send,
 {
-    let sample_rate = config.sample_rate.0 as f32;
+    let rate = sample_rate as f32;
     let mut t = 0u64;
     Box::new(move || {
         t = t + 1;
-        ((t as f32) * frequency.read() * 2.0 * PI / sample_rate).sin()
-        // (t * frequency.read() * 2.0 * PI).sin()
+        ((t as f32) * frequency.read() * 2.0 * PI / rate).sin()
     })
 }
 
 
 /// Generate a square wave tone of the provided frequncy indefinitely.
-pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-    let mut gen = sine(&config, frequency);
+pub fn square(sample_rate: u32, frequency: f32) -> Generator {
+    let mut gen = sine(sample_rate, frequency);
     Box::new(move || {
         let value = gen();
         if value > 0.0 { 1.0 } else { 0.0 }
@@ -37,12 +35,12 @@ pub fn square(config: &cpal::StreamConfig, frequency: f32) -> Generator {
 
 
 /// Generate a sawtooth wave of the provided frequncy indefinitely.
-pub fn sawtooth(config: &cpal::StreamConfig, frequency: f32) -> Generator {
-    let sample_rate = config.sample_rate.0 as f32;
+pub fn sawtooth(sample_rate: u32, frequency: f32) -> Generator {
+    let rate = sample_rate as f32;
     let mut sample_clock = 0f32;
     Box::new(move || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        let val = frequency * (sample_clock / sample_rate);
+        sample_clock = (sample_clock + 1.0) % rate;
+        let val = frequency * (sample_clock / rate);
         val - val.floor()
     })
 }
