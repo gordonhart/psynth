@@ -62,9 +62,9 @@ pub trait Pot<T>: Send {
 /// ```rust
 /// use psynth::{FilterComposable, Generator, filters, generators};
 /// let config = cpal::StreamConfig { channels: 1, sample_rate: cpal::SampleRate(44100) };
-/// let mut gen: Generator = generators::flat(&config, 440.0)
-///     .compose(filters::warble(&config, 1.0))
-///     .compose(filters::warble(&config, 2.0));
+/// let mut gen: Generator = generators::sine(config.sample_rate.0, 440.0)
+///     .compose(filters::gain(0.5))
+///     .compose(filters::offset(2.0));
 /// ```
 pub trait FilterComposable {
     fn compose(self, filter: Filter) -> Generator;

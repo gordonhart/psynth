@@ -25,8 +25,9 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
     let generator: psynth::Generator =
-        // generators::microphone(&host, &config)
         generators::multi(vec![
+            generators::microphone(&host, &config)
+                .compose(filters::reverb(rate, 0.0, 0.0)),
             generators::sine(rate, 200.0)
                 .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0)))
                 .compose(filters::gain(0.5)),
