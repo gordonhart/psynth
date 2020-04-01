@@ -6,6 +6,7 @@ use crate::{
 };
 
 
+/// Duplicates single-stream audio to as many channels as necessary.
 pub struct MonoConsumer {
     channels: usize,
     generator: Option<Generator>,

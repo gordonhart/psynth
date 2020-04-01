@@ -31,19 +31,26 @@ pub type Filter = Box<dyn FnMut(Sample) -> Sample + Send>;
 ///
 /// Audio streams are driven by `Consumer`s. The frequency of calls to the generator are determined
 /// by the `Consumer`s need to fill buffers as provided to the `Consumer` by external (`cpal`) code. 
-// pub type Consumer = Box<dyn FnMut(Generator) -> Box<dyn FnMut(&mut [Sample]) + Send>>;
 pub trait Consumer: Send {
     fn bind(self, generator: Generator) -> Self;
     fn fill(&mut self, output_buffer: &mut [Sample]);
 }
 
 
+/// Passive observer on the stream received by a `Consumer`.
 pub trait Observer {
     fn sample(&mut self, sample: Sample);
 }
 
 
-pub trait Pot<T>: Send { // + Sync {
+/// A potentiometer provides a controllable input to a function.
+pub trait Pot<T>: Send {
+
+    /// Read a value off of the `Pot`.
+    ///
+    /// Note that the reference to `&self` is immutable -- `Pot` implementors shouldn't really be
+    /// modifying themselves based on reads, as that goes against their meatspace namesake, which
+    /// is not altered by the act of reading.
     fn read(&self) -> T;
 }
 

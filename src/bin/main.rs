@@ -26,7 +26,6 @@ fn main() -> Result<()> {
     let rate: u32 = config.sample_rate.0;
     let generator: psynth::Generator =
         // generators::microphone(&host, &config)
-        /*
         generators::multi(vec![
             generators::sine(rate, 200.0)
                 .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0)))
@@ -36,11 +35,6 @@ fn main() -> Result<()> {
         .compose(filters::ramp_up(rate, 0.01))
         .compose(filters::reverb(rate, 0.0, 0.0))
         .compose(filters::gain(0.025))
-        */
-        generators::sine(rate, 440.0)
-            .compose(filters::ramp_up(rate, 0.1))
-            .compose(filters::gain(controls::StdinPot::default()))
-            .compose(filters::clip(0.0, 1.0))
         ;
 
     let observers: Vec<Box<dyn Observer + Send>> = vec![

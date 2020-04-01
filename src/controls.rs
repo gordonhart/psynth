@@ -4,6 +4,8 @@ use std::thread;
 use crate::{generators, filters, Pot, Generator, FilterComposable};
 
 
+/// Allow for the usage of raw floats as `f32` potentiometers when control over the value is not
+/// necessary.
 impl Pot<f32> for f32 {
     fn read(&self) -> f32 {
         *self
