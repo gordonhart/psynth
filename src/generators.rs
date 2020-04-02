@@ -1,5 +1,5 @@
 use std::f32::consts::PI;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
 
 use anyhow::Result;
@@ -7,7 +7,7 @@ use byteorder::{BigEndian, ByteOrder};
 use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use ringbuf::RingBuffer;
 
-use crate::{Generator, Pot, Sample};
+use crate::{Generator, Pot};
 
 
 /// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
@@ -61,61 +61,28 @@ pub fn multi(mut generators: Vec<Generator>) -> Generator {
 }
 
 
-/// Change balance between left/right streams in a stereo setup.
-pub fn balancer<B>(
-    balance_function: B,
-    left: Generator,
-    right: Generator,
-) -> (Generator, Generator)
+pub fn metronome<P>(sample_rate: u32, bpm: P) -> Generator
 where
-    B: FnMut(Sample, Sample) -> (Sample, Sample) + Send + 'static,
+    P: Pot<f32> + 'static,
 {
-    let vals_left = Arc::new(Mutex::new((None::<Sample>, None::<Sample>)));
-    let vals_right = Arc::clone(&vals_left);
+    let rate = sample_rate as f32;
+    let mut sample_clock = 0f32;
+    let n_steps_of_tick = 1500.0;
+    let mut sine_gen = sine(sample_rate, 400.0);
 
-    let generators_left = Arc::new(Mutex::new((left, right)));
-    let generators_right = Arc::clone(&generators_left);
-
-    let balance_f_left = Arc::new(Mutex::new(balance_function));
-    let balance_f_right = Arc::clone(&balance_f_left);
-
-    let out_left: Generator = Box::new(move || {
-        let mut vals_unlocked = vals_left.lock().unwrap();
-        match *vals_unlocked {
-            (Some(_), Some(_)) => unreachable!("neither value collected -- should never occur"),
-            (Some(l), None) => {
-                *vals_unlocked = (None, None);
-                l
-            },
-            (None, _) => {
-                let (ref mut left_gen, ref mut right_gen) = &mut *generators_left.lock().unwrap();
-                let ref mut balance_f = &mut *balance_f_left.lock().unwrap();
-                let (l, r) = balance_f(left_gen(), right_gen());
-                *vals_unlocked = (None, Some(r));
-                l
-            },
+    Box::new(move || {
+        let n_steps_between_ticks = 60.0 * rate / bpm.read();
+        sample_clock += 1.0;
+        if sample_clock > n_steps_between_ticks {
+            sample_clock = 0.0;
         }
-    });
-
-    let out_right: Generator = Box::new(move || {
-        let mut vals_unlocked = vals_right.lock().unwrap();
-        match *vals_unlocked {
-            (Some(_), Some(_)) => unreachable!("neither value collected -- should never occur"),
-            (None, Some(r)) => {
-                *vals_unlocked = (None, None);
-                r
-            },
-            (_, None) => {
-                let (ref mut left_gen, ref mut right_gen) = &mut *generators_right.lock().unwrap();
-                let ref mut balance_f = &mut *balance_f_right.lock().unwrap();
-                let (l, r) = balance_f(left_gen(), right_gen());
-                *vals_unlocked = (Some(l), None);
-                r
-            },
+        let s = sine_gen();
+        if sample_clock < n_steps_of_tick {
+            s * (1.0 - ((n_steps_of_tick / 2.0) - sample_clock).abs() / (n_steps_of_tick / 2.0))
+        } else {
+            0.0
         }
-    });
-
-    (out_left, out_right)
+    })
 }
 
 

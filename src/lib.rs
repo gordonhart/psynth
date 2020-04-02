@@ -5,6 +5,10 @@ pub mod observers;
 pub mod controls;
 
 
+/// Audio out value at a given instant.
+///
+/// Should remain on `[-1, 1]` or else the playback device enters undefined behavior that probably
+/// involves clipping.
 pub type Sample = f32;
 
 
@@ -13,6 +17,8 @@ pub type Sample = f32;
 /// Each call generates the output value at that given instance in time, e.g. for a sample rate of
 /// 44100Hz, this function should be called 44100 times per second to generate that second's worth
 /// of sound.
+// NOTE: current priorities are functionality and ease of use over corectness, 'static it is
+// pub type Generator<'a> = Box<dyn FnMut() -> Sample + Send + 'a>;
 pub type Generator = Box<dyn FnMut() -> Sample + Send>;
  
 
@@ -75,3 +81,17 @@ impl FilterComposable for Generator {
         filters::compose(self, filter)
     }
 }
+
+
+/*
+pub struct AudioIter: Iterator<Item=Sample> {}
+pub trait AudioSample {
+    fn iter(&self) -> AudioIter;
+}
+impl Iterator for AudioIter {
+    type Item = Sample;
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+*/

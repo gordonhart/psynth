@@ -35,7 +35,7 @@ fn main() -> Result<()> {
         .compose(filters::offset(1.0))
         // .compose(filters::gain(0.5));
         ;
-    let (l_new, r_new) = generators::balancer(
+    let (l_new, r_new) = controls::balancer(
         move |l, r| {
             let phase = phaser();
             (l * phase, r * (1.0 - phase).abs())
@@ -43,6 +43,7 @@ fn main() -> Result<()> {
         left_generator,
         right_generator,
     );
+
     /*
     let generator: psynth::Generator =
         generators::multi(vec![
@@ -59,7 +60,7 @@ fn main() -> Result<()> {
         ;
         */
 
-    let observers: Vec<Box<dyn Observer + Send>> = vec![
+    let _observers: Vec<Box<dyn Observer + Send>> = vec![
         // Box::new(std::io::stdout())
     ];
     /*
@@ -70,7 +71,8 @@ fn main() -> Result<()> {
     */
     let mut consumer = consumers::StereoConsumer::new(channels)
         // .bind(left_generator, right_generator)
-        .bind(l_new, r_new)
+        // .bind(generators::metronome(rate, controls::sine_pot(rate, 0.03, 40.0, 200.0)), r_new)
+        .bind(generators::metronome(rate, 60.0), r_new)
         ;
 
     let output_stream = output_device.build_output_stream(

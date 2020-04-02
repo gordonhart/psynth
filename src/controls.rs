@@ -1,7 +1,8 @@
 use std::cell::{RefCell, Cell};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::{generators, filters, Pot, Generator, FilterComposable};
+use crate::{generators, filters, Pot, Generator, FilterComposable, Sample};
 
 
 /// Allow for the usage of raw floats as `f32` potentiometers when control over the value is not
@@ -107,4 +108,69 @@ impl Pot<f32> for StdinPot {
             Err(_) => self.cur.get(),
         }
     }
+}
+
+
+/// Change balance between left/right streams in a stereo setup.
+///
+/// The balancing is performed by the provided `balance_function` that determines how much of each
+/// channels' signal should contribute to a channel's output at any given sample.
+pub fn balancer<B>(
+    balance_function: B,
+    left: Generator,
+    right: Generator,
+) -> (Generator, Generator)
+where
+    B: FnMut(Sample, Sample) -> (Sample, Sample) + Send + 'static,
+{
+    // TODO: use single Arc for whole shared state, instead of 3 Arcs for the three components
+    // that are shared?
+    let vals_left = Arc::new(Mutex::new((None::<Sample>, None::<Sample>)));
+    let vals_right = Arc::clone(&vals_left);
+
+    let generators_left = Arc::new(Mutex::new((left, right)));
+    let generators_right = Arc::clone(&generators_left);
+
+    let balance_f_left = Arc::new(Mutex::new(balance_function));
+    let balance_f_right = Arc::clone(&balance_f_left);
+
+    let out_left: Generator = Box::new(move || {
+        let mut vals_unlocked = vals_left.lock().unwrap();
+        match *vals_unlocked {
+            (Some(_), Some(_)) => unreachable!("neither value collected -- should never occur"),
+            (Some(l), None) => {
+                *vals_unlocked = (None, None);
+                l
+            },
+            (None, _) => {
+                let (ref mut left_gen, ref mut right_gen) = &mut *generators_left.lock().unwrap();
+                let ref mut balance_f = &mut *balance_f_left.lock().unwrap();
+                let (l, r) = balance_f(left_gen(), right_gen());
+                *vals_unlocked = (None, Some(r));
+                l
+            },
+        }
+    });
+
+    // this would get tedious for more than two channels -- is there a general-form solution for
+    // this multi-stream muxing problem?
+    let out_right: Generator = Box::new(move || {
+        let mut vals_unlocked = vals_right.lock().unwrap();
+        match *vals_unlocked {
+            (Some(_), Some(_)) => unreachable!("neither value collected -- should never occur"),
+            (None, Some(r)) => {
+                *vals_unlocked = (None, None);
+                r
+            },
+            (_, None) => {
+                let (ref mut left_gen, ref mut right_gen) = &mut *generators_right.lock().unwrap();
+                let ref mut balance_f = &mut *balance_f_right.lock().unwrap();
+                let (l, r) = balance_f(left_gen(), right_gen());
+                *vals_unlocked = (Some(l), None);
+                r
+            },
+        }
+    });
+
+    (out_left, out_right)
 }
