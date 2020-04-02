@@ -16,7 +16,7 @@ TODOs:
     - [ ] Envelope filters?
     - [ ] Band-pass filters?
 - [ ] Research and implement more controls
-- [ ] Implement metronome
+- [x] Implement metronome
 - [ ] Explore possibility of integration of 3rd-party effects (e.g. VST instruments)
 - ~~[ ] Sort out the `'static` situation (shouldn't be a requirement for `Generator`, `Filter` types)~~
     - Currently prioritizing ease of use and functionality over correctness -- `'static` as a

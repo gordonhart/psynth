@@ -21,8 +21,8 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow!("missing default output device"))?;
     // let config_supported = output_device.default_output_config()?;
     // let config: cpal::StreamConfig = config_supported.into();
-    // println!("default config: {:?}", config);
     let config = cpal::StreamConfig { channels: 2, sample_rate: cpal::SampleRate(44100) };
+    println!("config: {:?}", config);
 
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
@@ -81,8 +81,34 @@ fn main() -> Result<()> {
             r_new)
         ;
     */
-    let gen = generators::metronome(rate, 240.0,
-        sampling::VecTrack::try_from_wav_file("../wavs/371192__karolist__acoustic-kick.wav")?);
+
+    let kick = "../wavs/371192__karolist__acoustic-kick.wav";
+    let hum = "../wavs/17231__meatball4u__hum2.wav";
+    let gen = controls::join(vec![
+        generators::metronome(rate, 120.0, sampling::VecTrack::try_from_wav_file(rate, kick)?)
+            .fork(|l, r| controls::join2(
+                controls::GeneratorPot::new(generators::square(rate, 1.0 / 4.0)),
+                l.compose(filters::comb(rate, 0.25, 0.25, filters::CombDirection::FeedBack)),
+                r)),
+        generators::sine(rate, controls::StdinPot::default())
+            .compose(filters::gain(0.1))
+            .compose(filters::reverb(rate, 0.0, 0.0))
+            .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0))),
+        generators::repeat(sampling::VecTrack::try_from_wav_file(rate, hum)?)
+            .compose(filters::gain(0.25)),
+        ]);
+    /*
+    let gen = controls::join(vec![
+        generators::metronome(rate, 120.0,
+            sampling::VecTrack::try_from_wav_file(rate, kick)?)
+            .compose(filters::gain(0.25))
+            .compose(filters::reverb(rate, 0.0, 0.0)),
+        generators::repeat(
+            sampling::VecTrack::try_from_wav_file(rate, hum)?)
+            .compose(filters::gain(0.1)),
+        ]);
+    */
+    /*
     let mut phaser = generators::square(rate, 0.25)
         .compose(filters::offset(1.0))
         .compose(filters::gain(0.5))
@@ -96,7 +122,8 @@ fn main() -> Result<()> {
         left_generator,
         right_generator,
     );
-
+    */
+    let (l_new, r_new) = controls::fork(gen);
     let mut consumer = consumers::StereoConsumer::new(channels)
         .bind(l_new, r_new)
         ;

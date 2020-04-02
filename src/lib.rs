@@ -74,11 +74,22 @@ pub trait Pot<T>: Send {
 /// ```
 pub trait FilterComposable {
     fn compose(self, filter: Filter) -> Generator;
+    fn fork<F>(self, join_function: F) -> Generator
+    where
+        F: FnMut(Generator, Generator) -> Generator + Send;
 }
 
 
 impl FilterComposable for Generator {
     fn compose(self, filter: Filter) -> Generator {
         filters::compose(self, filter)
+    }
+
+    fn fork<F>(self, mut join_function: F) -> Generator
+    where
+        F: FnMut(Generator, Generator) -> Generator + Send,
+    {
+        let (left_gen, right_gen) = controls::fork(self);
+        join_function(left_gen, right_gen)
     }
 }
