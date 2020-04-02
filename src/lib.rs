@@ -3,6 +3,7 @@ pub mod filters;
 pub mod consumers;
 pub mod observers;
 pub mod controls;
+pub mod sampling;
 
 
 /// Audio out value at a given instant.
@@ -81,17 +82,3 @@ impl FilterComposable for Generator {
         filters::compose(self, filter)
     }
 }
-
-
-/*
-pub struct AudioIter: Iterator<Item=Sample> {}
-pub trait AudioSample {
-    fn iter(&self) -> AudioIter;
-}
-impl Iterator for AudioIter {
-    type Item = Sample;
-    fn next(&mut self) -> Option<Self::Item> {
-        None
-    }
-}
-*/

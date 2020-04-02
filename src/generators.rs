@@ -8,6 +8,7 @@ use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use ringbuf::RingBuffer;
 
 use crate::{Generator, Pot};
+use crate::sampling::SampleTrack;
 
 
 /// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
@@ -29,7 +30,7 @@ pub fn square(sample_rate: u32, frequency: f32) -> Generator {
     let mut gen = sine(sample_rate, frequency);
     Box::new(move || {
         let value = gen();
-        if value > 0.0 { 1.0 } else { 0.0 }
+        if value > 0.0 { 1.0 } else { -1.0 }
     })
 }
 
@@ -61,28 +62,29 @@ pub fn multi(mut generators: Vec<Generator>) -> Generator {
 }
 
 
-pub fn metronome<P>(sample_rate: u32, bpm: P) -> Generator
+pub fn metronome<P, T>(sample_rate: u32, bpm: P, mut sound: T) -> Generator
 where
     P: Pot<f32> + 'static,
+    T: SampleTrack + Send + 'static,
 {
     let rate = sample_rate as f32;
     let mut sample_clock = 0f32;
-    let n_steps_of_tick = 1500.0;
-    let mut sine_gen = sine(sample_rate, 400.0);
 
     Box::new(move || {
         let n_steps_between_ticks = 60.0 * rate / bpm.read();
         sample_clock += 1.0;
         if sample_clock > n_steps_between_ticks {
             sample_clock = 0.0;
+            sound.reset();
         }
-        let s = sine_gen();
-        if sample_clock < n_steps_of_tick {
-            s * (1.0 - ((n_steps_of_tick / 2.0) - sample_clock).abs() / (n_steps_of_tick / 2.0))
-        } else {
-            0.0
-        }
+        sound.next().unwrap_or_else(|| 0.0)
     })
+}
+
+
+/// Never creates any sound.
+pub fn silence() -> Generator {
+    Box::new(move || 0.0)
 }
 
 

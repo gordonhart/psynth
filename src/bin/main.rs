@@ -6,6 +6,7 @@ use psynth::{
     filters,
     consumers,
     controls,
+    sampling,
     Consumer,
     FilterComposable,
     Sample,
@@ -18,12 +19,14 @@ fn main() -> Result<()> {
     let output_device = host
         .default_output_device()
         .ok_or_else(|| anyhow!("missing default output device"))?;
-    let config_supported = output_device.default_output_config()?;
-    let config: cpal::StreamConfig = config_supported.into();
-    println!("default config: {:?}", config);
+    // let config_supported = output_device.default_output_config()?;
+    // let config: cpal::StreamConfig = config_supported.into();
+    // println!("default config: {:?}", config);
+    let config = cpal::StreamConfig { channels: 2, sample_rate: cpal::SampleRate(44100) };
 
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
+    /*
     let left_generator = generators::sine(rate, 200.0)
         .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0)))
         .compose(filters::gain(0.5));
@@ -44,7 +47,6 @@ fn main() -> Result<()> {
         right_generator,
     );
 
-    /*
     let generator: psynth::Generator =
         generators::multi(vec![
             generators::microphone(&host, &config)
@@ -58,7 +60,6 @@ fn main() -> Result<()> {
         .compose(filters::reverb(rate, 0.0, 0.0))
         .compose(filters::gain(0.025))
         ;
-        */
 
     let _observers: Vec<Box<dyn Observer + Send>> = vec![
         // Box::new(std::io::stdout())
@@ -71,8 +72,33 @@ fn main() -> Result<()> {
     */
     let mut consumer = consumers::StereoConsumer::new(channels)
         // .bind(left_generator, right_generator)
+        // .bind(l_new, r_new)
         // .bind(generators::metronome(rate, controls::sine_pot(rate, 0.03, 40.0, 200.0)), r_new)
-        .bind(generators::metronome(rate, 60.0), r_new)
+        .bind(
+            // generators::metronome(rate, controls::sine_pot(rate, 0.2, 50.0, 200.0),
+                // sampling::SampleTrack::from_generator(generators::sine(rate, 440.0), 1000)),
+            generators::metronome(rate, 120.0, track),
+            r_new)
+        ;
+    */
+    let gen = generators::metronome(rate, 240.0,
+        sampling::VecTrack::try_from_wav_file("../wavs/371192__karolist__acoustic-kick.wav")?);
+    let mut phaser = generators::square(rate, 0.25)
+        .compose(filters::offset(1.0))
+        .compose(filters::gain(0.5))
+        ;
+    let (left_generator, right_generator) = controls::fork(gen);
+    let (l_new, r_new) = controls::balancer(
+        move |l, r| {
+            let phase = phaser();
+            (l * phase, r * (1.0 - phase))
+        },
+        left_generator,
+        right_generator,
+    );
+
+    let mut consumer = consumers::StereoConsumer::new(channels)
+        .bind(l_new, r_new)
         ;
 
     let output_stream = output_device.build_output_stream(

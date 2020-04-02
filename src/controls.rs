@@ -174,3 +174,9 @@ where
 
     (out_left, out_right)
 }
+
+
+/// Fork the provided `Generator` into two identical `Generator`s.
+pub fn fork(generator: Generator) -> (Generator, Generator) {
+    balancer(move |l, _| (l, l), generator, generators::silence())
+}
