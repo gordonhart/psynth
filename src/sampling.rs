@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use hound::{WavReader, WavSpec, SampleFormat};
 
 use crate::{Sample, Generator};
@@ -32,13 +32,20 @@ impl VecTrack {
 
     pub fn try_from_wav_file<P>(sample_rate: u32, filename: P) -> Result<Self>
     where
-        P: AsRef<Path>,
+        P: AsRef<Path> + Clone,
     {
-        let mut reader = WavReader::open(filename)?;
+        let mut reader = WavReader::open(filename.clone())?;
         let mut track = Vec::with_capacity(reader.len() as usize);
 
         let spec = reader.spec();
         println!("{:?}", spec);
+        let filename_str = filename.as_ref().to_str().unwrap_or_else(|| "<error parsing filename>");
+        if spec.sample_rate != sample_rate {
+            return Err(anyhow!(
+                "unable to handle WAV sample rate '{}' that differs from output sample rate '{}' \
+                for file '{:?}'", spec.sample_rate, sample_rate, filename_str
+            ));
+        }
         match spec {
             WavSpec { sample_format: SampleFormat::Float, bits_per_sample: 32, .. } => {
                 for s in reader.samples() {
@@ -51,7 +58,11 @@ impl VecTrack {
                     track.push((int_sample as f32) / (std::i16::MAX as f32));
                 }
             },
-            other => unimplemented!("unable to handle '{:?}' .wav spec", other),
+            other => {
+                return Err(anyhow!(
+                    "unable to handle '{:?}' WAV spec for '{:?}'", other, filename_str
+                ));
+            },
         }
 
         Ok(VecTrack {

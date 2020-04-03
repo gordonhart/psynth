@@ -118,7 +118,7 @@ impl Pot<f32> for StdinPot {
 ///
 /// The yielded `Generator`s are entangled in that calling one also calls the other. This is
 /// important to take note of for `Generator` implementations that keep some sort of internal state.
-pub fn muxer<F>(
+pub fn mux2<F>(
     mux_function: F,
     left: Generator,
     right: Generator,
@@ -182,7 +182,7 @@ where
 /// Fork the provided `Generator` into two entangled `Generator`s that will yield the same value
 /// on each at any given instant.
 pub fn fork(generator: Generator) -> (Generator, Generator) {
-    muxer(move |l, _| (l, l), generator, generators::silence())
+    mux2(move |l, _| (l, l), generator, generators::silence())
 }
 
 
@@ -219,10 +219,10 @@ where
 }
 
 
-pub fn balancer<P>(
-    balance_pot: P,
-    left: Generator,
-    right: Generator,
+pub fn balance<P>(
+    _balance_pot: P,
+    _left: Generator,
+    _right: Generator,
 ) -> (Generator, Generator)
 where
     P: FnMut(Sample, Sample) -> (Sample, Sample) + Send + 'static,
