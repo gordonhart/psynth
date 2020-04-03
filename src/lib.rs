@@ -1,3 +1,4 @@
+pub mod music;
 pub mod generators;
 pub mod filters;
 pub mod consumers;
