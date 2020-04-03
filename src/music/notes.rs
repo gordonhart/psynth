@@ -1,4 +1,8 @@
+use std::convert::TryFrom;
 use std::fmt;
+
+use anyhow::{anyhow, Result};
+use num_enum::TryFromPrimitive;
 
 
 pub type Hz = f32;
@@ -13,6 +17,23 @@ pub enum Note {
     E,
     F,
     G,
+}
+
+
+impl TryFrom<char> for Note {
+    type Error = anyhow::Error;
+    fn try_from(c: char) -> Result<Self, Self::Error> {
+        match c {
+            'A' => Ok(Note::A),
+            'B' => Ok(Note::B),
+            'C' => Ok(Note::C),
+            'D' => Ok(Note::D),
+            'E' => Ok(Note::E),
+            'F' => Ok(Note::F),
+            'G' => Ok(Note::G),
+            _ => Err(anyhow!("unable to create Note from '{}'", c)),
+        }
+    }
 }
 
 
@@ -31,6 +52,19 @@ pub enum Pitch {
 }
 
 
+impl TryFrom<char> for Pitch {
+    type Error = anyhow::Error;
+    fn try_from(c: char) -> Result<Self, Self::Error> {
+        match c {
+            'b' | '♭' => Ok(Pitch::Flat),
+            '♮' => Ok(Pitch::Natural),
+            '#' | '♯' => Ok(Pitch::Sharp),
+            _ => Err(anyhow!("unable to create Pitch from '{}'", c)),
+        }
+    }
+}
+
+
 impl fmt::Display for Pitch {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -42,7 +76,8 @@ impl fmt::Display for Pitch {
 }
 
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, TryFromPrimitive)]
+#[repr(usize)]
 pub enum Octave {
     Zero,
     One,
@@ -53,6 +88,17 @@ pub enum Octave {
     Six,
     Seven,
     Eight,
+}
+
+
+impl TryFrom<char> for Octave {
+    type Error = anyhow::Error;
+    fn try_from(c: char) -> Result<Self, Self::Error> {
+        let err_f = || anyhow!("unable to create a Octave from '{}'", c);
+        let octave_digit = c.to_digit(10).ok_or_else(err_f)? as usize;
+        // wrap this result in Ok(..?) to allow anyhow to work its magic in Result conversion
+        Ok(Octave::try_from(octave_digit)?)
+    }
 }
 
 
@@ -77,6 +123,28 @@ impl Tone {
 
     pub fn new(note: Note, pitch: Pitch, octave: Octave) -> Self {
         Self { note, pitch, octave }
+    }
+
+    // NOTE: can't impl TryFrom for generic type param (like AsRef<str>):
+    // https://github.com/rust-lang/rust/issues/50133
+    pub fn try_from<S>(s: S) -> Result<Self>
+    where
+        S: AsRef<str>,
+    {
+        let s_str = s.as_ref();
+        let s_len = s_str.chars().count(); // TODO: this will fail for certain unicode glyphs
+        if s_len == 2 {  // e.g. A0
+            let note = Note::try_from(s_str.chars().nth(0).unwrap_or('_'))?;
+            let octave = Octave::try_from(s_str.chars().nth(1).unwrap_or('_'))?;
+            Ok(Tone::new(note, Pitch::Natural, octave))
+        } else if s_len == 3 { // e.g. F#7
+            let note = Note::try_from(s_str.chars().nth(0).unwrap_or('_'))?;
+            let pitch = Pitch::try_from(s_str.chars().nth(1).unwrap_or('_'))?;
+            let octave = Octave::try_from(s_str.chars().nth(2).unwrap_or('_'))?;
+            Ok(Tone::new(note, pitch, octave))
+        } else {
+            Err(anyhow!("unable to create a Tone from '{}'", s_str))
+        }
     }
 
     pub fn semitone_rank(&self) -> i32 {
@@ -168,5 +236,11 @@ mod test {
     #[test]
     fn test_semitone_distance() {
         assert_eq!(Tone::FIXED_TONE.semitone_distance_to(&Tone::FIXED_TONE), 0);
+    }
+
+    #[test]
+    fn test_tone_try_from() {
+        assert_eq!(Tone::FIXED_TONE, Tone::try_from("A4").unwrap());
+        assert_eq!(Tone::new(Note::C, Pitch::Sharp, Octave::Zero), Tone::try_from("C#0").unwrap());
     }
 }
