@@ -236,30 +236,45 @@ pub mod hardware {
     use super::*;
 
     use anyhow::Result;
+    use embedded_hal::blocking::i2c::Read;
     use linux_embedded_hal::I2cdev;
 
-    pub struct I2cPot<T> {
-        device: I2cdev,
+    pub struct BlockingI2cPot<T> {
+        address: u8,
+        device: RefCell<I2cdev>,
+        buffer: RefCell<Vec<u8>>,
         converter: Box<dyn Fn(&[u8]) -> T + Send>,
     }
 
-    impl<T> I2cPot<T> {
-        pub fn new<F>(bus: u8, address: u16, converter: F) -> Result<I2cPot<T>>
+    impl<T> BlockingI2cPot<T> {
+        pub fn new<F>(
+            bus: u8,
+            address: u8,
+            message_size: usize, // number of bytes that comprise a single reading
+            converter: F,
+        ) -> Result<BlockingI2cPot<T>>
         where
             F: Fn(&[u8]) -> T + Send + 'static,
         {
             let mut device = I2cdev::new(format!("/dev/i2c-{}", bus))?;
-            device.set_slave_address(address)?;
-            Ok(I2cPot {
-                device: device,
+            device.set_slave_address(address as u16)?;
+            Ok(BlockingI2cPot {
+                address: address,
+                device: RefCell::new(device),
+                buffer: RefCell::new(vec![0; message_size]),
                 converter: Box::new(converter),
             })
         }
     }
 
-    impl<T> Pot<T> for I2cPot<T> {
+    impl<T> Pot<T> for BlockingI2cPot<T> {
         fn read(&self) -> T {
-            unimplemented!()
+            let mut device = self.device.borrow_mut();
+            let mut buffer = self.buffer.borrow_mut();
+            // TODO: not panic
+            device.read(self.address, buffer.as_mut_slice()).expect("i2c error");
+            println!("{:?}", buffer);
+            (self.converter)(buffer.as_slice())
         }
     }
 }
