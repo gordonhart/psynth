@@ -8,6 +8,7 @@ use cpal::traits::{HostTrait, DeviceTrait, StreamTrait};
 use ringbuf::RingBuffer;
 
 use crate::{Generator, Pot};
+use crate::sampling::SampleTrack;
 
 
 /// Generate a sine wave of the provided frequency indefinitely and with maximum amplitude (-1, 1).
@@ -29,7 +30,7 @@ pub fn square(sample_rate: u32, frequency: f32) -> Generator {
     let mut gen = sine(sample_rate, frequency);
     Box::new(move || {
         let value = gen();
-        if value > 0.0 { 1.0 } else { 0.0 }
+        if value > 0.0 { 1.0 } else { -1.0 }
     })
 }
 
@@ -46,17 +47,46 @@ pub fn sawtooth(sample_rate: u32, frequency: f32) -> Generator {
 }
 
 
-/// Add the provided `Generator` streams.
+/// Play back the provided `track` once per beat at the requested `bpm`.
 ///
-/// Allows composition of multiple input sources. Serves a similar purpose for `Generator`s as
-/// `filters::parallel` serves for `Filter`s.
-pub fn multi(mut generators: Vec<Generator>) -> Generator {
+/// For good results, the duration of the `track` should be less than the requested time between
+/// beats (e.g. a drum kick, not a whole song).
+pub fn metronome<P, T>(sample_rate: u32, bpm: P, mut track: T) -> Generator
+where
+    P: Pot<f32> + 'static,
+    T: SampleTrack + Send + 'static,
+{
+    let rate = sample_rate as f32;
+    let mut sample_clock = 0f32;
+
     Box::new(move || {
-        let mut out = 0f32;
-        for generator in generators.iter_mut() {
-            out += generator();
+        let n_steps_between_ticks = 60.0 * rate / bpm.read();
+        sample_clock += 1.0;
+        if sample_clock > n_steps_between_ticks {
+            sample_clock = 0.0;
+            track.reset();
         }
-        out
+        track.next().unwrap_or_else(|| 0.0)
+    })
+}
+
+
+/// Never creates any sound.
+pub fn silence() -> Generator {
+    Box::new(move || 0.0)
+}
+
+
+/// Repeatedly loop through the provided track indefinitely.
+pub fn repeat<T>(mut track: T) -> Generator
+where
+    T: SampleTrack + Send + 'static,
+{
+    Box::new(move || {
+        track.next().unwrap_or_else(|| {
+            track.reset();
+            track.next().unwrap_or_else(|| 0.0)
+        })
     })
 }
 

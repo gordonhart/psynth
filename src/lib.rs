@@ -3,8 +3,13 @@ pub mod filters;
 pub mod consumers;
 pub mod observers;
 pub mod controls;
+pub mod sampling;
 
 
+/// Audio out value at a given instant.
+///
+/// Should remain on `[-1, 1]` or else the playback device enters undefined behavior that probably
+/// involves clipping.
 pub type Sample = f32;
 
 
@@ -13,6 +18,8 @@ pub type Sample = f32;
 /// Each call generates the output value at that given instance in time, e.g. for a sample rate of
 /// 44100Hz, this function should be called 44100 times per second to generate that second's worth
 /// of sound.
+// NOTE: current priorities are functionality and ease of use over corectness, 'static it is
+// pub type Generator<'a> = Box<dyn FnMut() -> Sample + Send + 'a>;
 pub type Generator = Box<dyn FnMut() -> Sample + Send>;
  
 
@@ -32,7 +39,6 @@ pub type Filter = Box<dyn FnMut(Sample) -> Sample + Send>;
 /// Audio streams are driven by `Consumer`s. The frequency of calls to the generator are determined
 /// by the `Consumer`s need to fill buffers as provided to the `Consumer` by external (`cpal`) code. 
 pub trait Consumer: Send {
-    fn bind(self, generator: Generator) -> Self;
     fn fill(&mut self, output_buffer: &mut [Sample]);
 }
 
@@ -68,11 +74,22 @@ pub trait Pot<T>: Send {
 /// ```
 pub trait FilterComposable {
     fn compose(self, filter: Filter) -> Generator;
+    fn fork<F>(self, join_function: F) -> Generator
+    where
+        F: FnMut(Generator, Generator) -> Generator + Send;
 }
 
 
 impl FilterComposable for Generator {
     fn compose(self, filter: Filter) -> Generator {
         filters::compose(self, filter)
+    }
+
+    fn fork<F>(self, mut join_function: F) -> Generator
+    where
+        F: FnMut(Generator, Generator) -> Generator + Send,
+    {
+        let (left_gen, right_gen) = controls::fork(self);
+        join_function(left_gen, right_gen)
     }
 }
