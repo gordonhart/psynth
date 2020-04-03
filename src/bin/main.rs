@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     // not source controlled, ripped from freesound.org (awesome website!)
     let kick = "../wavs/371192__karolist__acoustic-kick.wav";
-    let hum = "../wavs/17231__meatball4u__hum2.wav";
+    // let hum = "../wavs/17231__meatball4u__hum2.wav";
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(controls::join(vec![
             generators::metronome(rate, 120.0, sampling::VecTrack::try_from_wav_file(rate, kick)?)
@@ -40,8 +40,8 @@ fn main() -> Result<()> {
                 .compose(filters::gain(0.1))
                 .compose(filters::reverb(rate, 0.0, 0.0))
                 .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0))),
-            generators::repeat(sampling::VecTrack::try_from_wav_file(rate, hum)?)
-                .compose(filters::gain(0.25)),
+            // generators::repeat(sampling::VecTrack::try_from_wav_file(rate, hum)?)
+            //     .compose(filters::gain(0.25)),
             ]));
 
     let output_stream = output_device.build_output_stream(

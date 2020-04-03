@@ -229,3 +229,37 @@ where
 {
     unimplemented!()
 }
+
+
+#[cfg(feature = "hardware")]
+pub mod hardware {
+    use super::*;
+
+    use anyhow::Result;
+    use linux_embedded_hal::I2cdev;
+
+    pub struct I2cPot<T> {
+        device: I2cdev,
+        converter: Box<dyn Fn(&[u8]) -> T + Send>,
+    }
+
+    impl<T> I2cPot<T> {
+        pub fn new<F>(bus: u8, address: u16, converter: F) -> Result<I2cPot<T>>
+        where
+            F: Fn(&[u8]) -> T + Send + 'static,
+        {
+            let mut device = I2cdev::new(format!("/dev/i2c-{}", bus))?;
+            device.set_slave_address(address)?;
+            Ok(I2cPot {
+                device: device,
+                converter: Box::new(converter),
+            })
+        }
+    }
+
+    impl<T> Pot<T> for I2cPot<T> {
+        fn read(&self) -> T {
+            unimplemented!()
+        }
+    }
+}
