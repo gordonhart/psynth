@@ -6,7 +6,6 @@
 
 use std::cell::Cell;
 use std::fs::File;
-use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 use std::io::Read;
@@ -101,11 +100,8 @@ where
     /// properly applied.
     const DEVICE_PATH: &'static str = "/dev/input/powermate";
 
-    pub fn new<P>(device_path: P, start: T, min: T, max: T, inc: T) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let mut file = File::open(device_path)?;
+    pub fn new(start: T, min: T, max: T, inc: T) -> Result<Self> {
+        let mut file = File::open(Self::DEVICE_PATH)?;
         let mut buffer = vec![0u8; Self::EVENT_LEN];
         let (sender, receiver) = mpsc::channel();
 
