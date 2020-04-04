@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
+#[allow(unused_imports)]
 use psynth::{
     generators,
     filters,
@@ -10,6 +11,7 @@ use psynth::{
     Consumer,
     FilterComposable,
     Sample,
+    music::notes,
 };
 
 
@@ -26,23 +28,22 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
 
-    // not source controlled, ripped from freesound.org (awesome website!)
-    let kick = "../wavs/371192__karolist__acoustic-kick.wav";
-    // let hum = "../wavs/17231__meatball4u__hum2.wav";
+    // demonstrate a key reading `true`/`false` values from stdin, with hardcoded attack and
+    // sustain functions that ramp by t^2
     let mut consumer = consumers::MonoConsumer::new(channels)
-        .bind(controls::join(vec![
-            generators::metronome(rate, 120.0, sampling::VecTrack::try_from_wav_file(rate, kick)?)
-                .fork(|l, r| controls::join2(
-                    controls::GeneratorPot::new(generators::square(rate, 1.0 / 4.0)),
-                    l.compose(filters::comb(rate, 0.25, 0.25, filters::CombDirection::FeedBack)),
-                    r)),
-            generators::sine(rate, controls::StdinPot::default())
-                .compose(filters::gain(0.1))
-                .compose(filters::reverb(rate, 0.0, 0.0))
-                .compose(filters::gain(controls::sine_pot(rate, 1.0 / 3.0, 0.0, 1.0))),
-            // generators::repeat(sampling::VecTrack::try_from_wav_file(rate, hum)?)
-            //     .compose(filters::gain(0.25)),
-            ]));
+        .bind(psynth::keys::SimpleKey::new(
+            generators::sine(rate, notes::Hz::from(notes::Tone::try_from("F#3")?)),
+            controls::StdinPot::new("bool", false, |l| Ok(l.parse::<bool>()?)),
+            move |i| {
+                let i_frac = (i as f32) / (rate as f32);
+                if i_frac >= 1.0 { 1.0 } else { i_frac * i_frac }
+            },
+            move |i| {
+                let i_frac = (i as f32) / (rate as f32);
+                if i_frac >= 1.0 { 0.0 } else { (1.0 - i_frac) * (1.0 - i_frac) }
+            },
+            ).into_generator())
+        ;
 
     let output_stream = output_device.build_output_stream(
         &config,

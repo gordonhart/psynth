@@ -86,3 +86,14 @@ impl SampleTrack for VecTrack {
         ret
     }
 }
+
+
+/// For compatibility's sake.
+impl SampleTrack for Generator {
+    fn next(&mut self) -> Option<Sample> {
+        Some(self())
+    }
+    fn reset(&mut self) {
+        // no resetting a Generator
+    }
+}
