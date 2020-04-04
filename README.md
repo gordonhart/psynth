@@ -30,3 +30,5 @@ TODOs:
     - Currently prioritizing ease of use and functionality over correctness -- `'static` as a
       requirement for `Generator` has not proven to be a roadblock in any way, and it may be
       preferable to code littered with `<'a>` explicit lifetimes
+- [ ] Implement some form of CLI for `psynth-play` such that doing new things doesn't always
+  involve modifying the `bin/main.rs` and recompiling

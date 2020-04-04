@@ -180,6 +180,8 @@ impl fmt::Display for Octave {
 }
 
 
+/// A tone on a chromatic (12-tone) scale, including octave.
+///
 /// Hiding the fields of `Tone` and providing getters like this allows for full external visibility
 /// but blocked direct instantiation, which is very important as many implemented operations will
 /// fail on invalid `Tone`s.
@@ -213,6 +215,7 @@ impl Tone {
         self.2
     }
 
+    /// Attempt to create a `Tone` from a string, e.g. `A#7`.
     // NOTE: can't impl TryFrom for generic type param (like AsRef<str>):
     // https://github.com/rust-lang/rust/issues/50133
     pub fn try_from<S>(s: S) -> Result<Self>
@@ -235,6 +238,9 @@ impl Tone {
         }
     }
 
+    /// Rank the tone within an octave.
+    ///
+    /// Mainly useful for determining relationships between different tones.
     pub fn semitone_rank(&self) -> i32 {
         use Note::*;
         use Pitch::*;
@@ -260,6 +266,10 @@ impl Tone {
         }
     }
 
+    /// Determine how far away this `Tone` is to the provided tone, in terms of semitone-steps.
+    ///
+    /// Returns a positive value if `self` is above `to`, negative if `self` is below `to` (i.e.
+    /// if `self` has a lower frequency than `to`).
     pub fn semitone_distance_to(&self, to: &Tone) -> i32 {
         let inter_octave_dist = (self.octave() as i32) - (to.octave() as i32);
         let intra_octave_dist = self.semitone_rank() - to.semitone_rank();
@@ -393,6 +403,7 @@ mod test {
     #[test]
     fn test_semitone_distance() {
         assert_eq!(Tone::FIXED_TONE.semitone_distance_to(&Tone::FIXED_TONE), 0);
+        assert_eq!(Tone::new(C, Sharp, Zero).unwrap().semitone_distance_to(&Tone::FIXED_TONE), -56);
     }
 
     #[test]

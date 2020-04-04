@@ -4,6 +4,8 @@ use crate::{Pot, Generator};
 use crate::sampling::SampleTrack;
 
 
+/// A profile, usually on `[0,1]`, usually describing a signal's strength at a given instant in
+/// time.
 pub trait Curve<T> {
     fn read(&self, sample_index: u64) -> T;
 }
@@ -26,6 +28,13 @@ where
 }
 
 
+/// Device representing a real-world 'key' (or button) on a machine.
+///
+/// Holds:
+///   - The `SampleTrack` it uses to produce sound
+///   - A `Pot<bool>` indicating if the switch is open or closed
+///   - An attack `Curve<f32>` defining the activation ramp-up behavior when switched on
+///   - A sustain `Curve<f32>` defining the deactivation ramp-down behavior when switched off
 pub struct SimpleKey<T, P, C1, C2>
 where
     T: SampleTrack + Send,
@@ -34,12 +43,13 @@ where
     C2: Curve<f32> + Send,
 {
     track: RefCell<T>,
-    activate: P, // is the key pressed?
-    attack: C1, // curve describing ramp up after press
-    sustain: C2, // curve describing dropoff after release
+    active: P,
+    attack: C1,
+    sustain: C2,
     n_since_activated: Cell<u64>,
     n_since_deactivated: Cell<u64>,
 }
+
 
 impl<T, P, C1, C2> SimpleKey<T, P, C1, C2>
 where
@@ -48,10 +58,10 @@ where
     C1: Curve<f32> + Send + 'static,
     C2: Curve<f32> + Send + 'static,
 {
-    pub fn new(track: T, activate: P, attack: C1, sustain: C2) -> Self {
+    pub fn new(track: T, active: P, attack: C1, sustain: C2) -> Self {
         Self {
             track: RefCell::new(track),
-            activate,
+            active,
             attack,
             sustain,
             n_since_activated: Cell::new(0),
@@ -79,7 +89,7 @@ where
     C2: Curve<f32> + Send,
 {
     fn read(&self) -> f32 {
-        let is_active = self.activate.read();
+        let is_active = self.active.read();
         let n_since_activated_prev = self.n_since_activated.get();
         let n_since_deactivated_prev = self.n_since_deactivated.get();
         let mut track_ref = self.track.borrow_mut();
