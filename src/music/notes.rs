@@ -104,7 +104,10 @@ impl TryFrom<char> for Octave {
 
 impl fmt::Display for Octave {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", (*self) as i32)
+        // unicode for subscript
+        let codepoints = vec![0xe2, 0x82, 0x80 + ((*self) as i32) as u8];
+        write!(f, "{}", std::str::from_utf8(codepoints.as_slice())
+            .unwrap_or_else(|_| panic!("bad unicode for Octave '{:?}'", self)))
     }
 }
 
@@ -118,11 +121,13 @@ pub struct Tone {
 
 
 impl Tone {
-    const FIXED_HZ: Hz = 440.0;
-    const FIXED_TONE: Self = Tone { note: Note::A, pitch: Pitch::Natural, octave: Octave::Four };
+    pub const FIXED_HZ: Hz = 440.0;
+    pub const FIXED_TONE: Self = Tone { note: Note::A, pitch: Pitch::Natural, octave: Octave::Four };
 
-    pub fn new(note: Note, pitch: Pitch, octave: Octave) -> Self {
-        Self { note, pitch, octave }
+    pub fn new(note: Note, pitch: Pitch, octave: Octave) -> Result<Self> {
+        let new_tone = Self { note, pitch, octave };
+        // block creation for notes that fail semitone_rank (do not exist, e.g. Cb3)
+        new_tone.semitone_rank().map(|_| new_tone)
     }
 
     // NOTE: can't impl TryFrom for generic type param (like AsRef<str>):
@@ -136,46 +141,46 @@ impl Tone {
         if s_len == 2 {  // e.g. A0
             let note = Note::try_from(s_str.chars().nth(0).unwrap_or('_'))?;
             let octave = Octave::try_from(s_str.chars().nth(1).unwrap_or('_'))?;
-            Ok(Tone::new(note, Pitch::Natural, octave))
+            Tone::new(note, Pitch::Natural, octave)
         } else if s_len == 3 { // e.g. F#7
             let note = Note::try_from(s_str.chars().nth(0).unwrap_or('_'))?;
             let pitch = Pitch::try_from(s_str.chars().nth(1).unwrap_or('_'))?;
             let octave = Octave::try_from(s_str.chars().nth(2).unwrap_or('_'))?;
-            Ok(Tone::new(note, pitch, octave))
+            Tone::new(note, pitch, octave)
         } else {
             Err(anyhow!("unable to create a Tone from '{}'", s_str))
         }
     }
 
-    pub fn semitone_rank(&self) -> i32 {
+    pub fn semitone_rank(&self) -> Result<i32> {
         use Note::*;
         use Pitch::*;
         match self {
-            Tone { note: C, pitch: Natural, .. } => 1,
+            Tone { note: C, pitch: Natural, .. } => Ok(1),
             Tone { note: C, pitch: Sharp,   .. } |
-            Tone { note: D, pitch: Flat,    .. } => 2,
-            Tone { note: D, pitch: Natural, .. } => 3,
+            Tone { note: D, pitch: Flat,    .. } => Ok(2),
+            Tone { note: D, pitch: Natural, .. } => Ok(3),
             Tone { note: D, pitch: Sharp,   .. } |
-            Tone { note: E, pitch: Flat,    .. } => 4,
-            Tone { note: E, pitch: Natural, .. } => 5,
-            Tone { note: F, pitch: Natural, .. } => 6,
+            Tone { note: E, pitch: Flat,    .. } => Ok(4),
+            Tone { note: E, pitch: Natural, .. } => Ok(5),
+            Tone { note: F, pitch: Natural, .. } => Ok(6),
             Tone { note: F, pitch: Sharp,   .. } |
-            Tone { note: G, pitch: Flat,    .. } => 7,
-            Tone { note: G, pitch: Natural, .. } => 8,
+            Tone { note: G, pitch: Flat,    .. } => Ok(7),
+            Tone { note: G, pitch: Natural, .. } => Ok(8),
             Tone { note: G, pitch: Sharp,   .. } |
-            Tone { note: A, pitch: Flat,    .. } => 9,
-            Tone { note: A, pitch: Natural, .. } => 10,
+            Tone { note: A, pitch: Flat,    .. } => Ok(9),
+            Tone { note: A, pitch: Natural, .. } => Ok(10),
             Tone { note: A, pitch: Sharp,   .. } |
-            Tone { note: B, pitch: Flat,    .. } => 11,
-            Tone { note: B, pitch: Natural, .. } => 12,
-            t => panic!("does '{}' exist?", t),
+            Tone { note: B, pitch: Flat,    .. } => Ok(11),
+            Tone { note: B, pitch: Natural, .. } => Ok(12),
+            t => Err(anyhow!("does '{}' exist?", t)),
         }
     }
 
-    pub fn semitone_distance_to(&self, to: &Tone) -> i32 {
+    pub fn semitone_distance_to(&self, to: &Tone) -> Result<i32> {
         let inter_octave_dist = (self.octave as i32) - (to.octave as i32);
-        let intra_octave_dist = self.semitone_rank() - to.semitone_rank();
-        intra_octave_dist + (12 * inter_octave_dist)
+        let intra_octave_dist = self.semitone_rank()? - to.semitone_rank()?;
+        Ok(intra_octave_dist + (12 * inter_octave_dist))
     }
 }
 
@@ -196,7 +201,7 @@ impl From<&Tone> for Hz {
         match tone {
             t if t == &Tone::FIXED_TONE => Tone::FIXED_HZ,
             t => {
-                let dist = t.semitone_distance_to(&Tone::FIXED_TONE);
+                let dist = t.semitone_distance_to(&Tone::FIXED_TONE).unwrap_or_else(|e| panic!(e));
                 Tone::FIXED_HZ * (2.0f32).powf(1.0 / 12.0).powi(dist)
             },
         }
@@ -229,8 +234,10 @@ mod test {
     fn test_tone_conversion() {
         let c0 = Tone::new(Note::C, Pitch::Sharp, Octave::Zero);
         assert_delta!(Hz::from(&c0), 17.32, EPSILON);
-        assert_delta!(Hz::from(Tone::new(Note::F, Pitch::Natural, Octave::Six)), 1396.91, EPSILON);
-        assert_delta!(Hz::from(Tone::new(Note::G, Pitch::Flat, Octave::Eight)), 5919.91, EPSILON);
+        assert_delta!(
+            Hz::from(Tone::new(Note::F, Pitch::Natural, Octave::Six).unwrap()), 1396.91, EPSILON);
+        assert_delta!(
+            Hz::from(Tone::new(Note::G, Pitch::Flat, Octave::Eight).unwrap()), 5919.91, EPSILON);
     }
 
     #[test]
@@ -241,6 +248,8 @@ mod test {
     #[test]
     fn test_tone_try_from() {
         assert_eq!(Tone::FIXED_TONE, Tone::try_from("A4").unwrap());
-        assert_eq!(Tone::new(Note::C, Pitch::Sharp, Octave::Zero), Tone::try_from("C#0").unwrap());
+        assert_eq!(
+            Tone::new(Note::C, Pitch::Sharp, Octave::Zero).unwrap(),
+            Tone::try_from("C#0").unwrap());
     }
 }

@@ -11,6 +11,7 @@ use psynth::{
     FilterComposable,
     Sample,
 };
+use psynth::music::notes;
 
 
 fn main() -> Result<()> {
@@ -26,6 +27,7 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
 
+    /*
     // not source controlled, ripped from freesound.org (awesome website!)
     let kick = "../wavs/371192__karolist__acoustic-kick.wav";
     let hum = "../wavs/17231__meatball4u__hum2.wav";
@@ -43,6 +45,11 @@ fn main() -> Result<()> {
             generators::repeat(sampling::VecTrack::try_from_wav_file(rate, hum)?)
                 .compose(filters::gain(0.25)),
             ]));
+    */
+
+    let mut consumer = consumers::MonoConsumer::new(channels)
+        .bind(generators::sine(rate, controls::StdinPot::new("tone", notes::Tone::FIXED_HZ,
+            |line| Ok(notes::Hz::from(notes::Tone::try_from(line)?)))));
 
     let output_stream = output_device.build_output_stream(
         &config,

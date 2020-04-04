@@ -2,6 +2,8 @@ use std::cell::{RefCell, Cell};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use anyhow::Result;
+
 use crate::{generators, filters, Pot, Generator, FilterComposable, Sample};
 
 
@@ -53,20 +55,26 @@ where
 
 
 /// Interactively read values from stdin via `readline`.
-pub struct StdinPot {
-    cur: Cell<f32>,
-    receiver: std::sync::mpsc::Receiver<f32>,
+pub struct StdinPot<T> {
+    cur: Cell<T>,
+    receiver: std::sync::mpsc::Receiver<T>,
 }
 
-impl Default for StdinPot {
+impl Default for StdinPot<f32> {
     fn default() -> Self {
-        Self::new("StdinPot")
+        Self::new("f32pot", 0.0, |line| Ok(line.parse::<f32>()?))
     }
 }
 
-impl StdinPot {
+impl<T> StdinPot<T>
+where
+    T: Send + 'static,
+{
     /// Create a new `StdinPot`, spawning a stdin reader thread.
-    fn new(name: &str) -> Self {
+    pub fn new<F>(name: &str, default: T, converter: F) -> Self
+    where
+        F: Fn(&str) -> Result<T> + Send + 'static,
+    {
         let prompt = format!("{}> ", name);
         let mut reader = rustyline::Editor::<()>::new();
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -77,12 +85,12 @@ impl StdinPot {
                     std::process::exit(0);
                 },
                 Ok(l) => {
-                    match l.parse::<f32>() {
+                    match converter(l.as_str()) {
                         Ok(val) => {
                             sender.send(val).unwrap();  // thread panic if channel is closed
                             reader.add_history_entry(l.as_str());
                         },
-                        Err(e) => eprintln!("'{}' is not a float, try again (reason: {:?})", l, e),
+                        Err(e) => eprintln!("unable to parse '{}', try again (reason: {:?})", l, e),
                     }
                 },
                 Err(e) => {
@@ -92,13 +100,13 @@ impl StdinPot {
             }
         });
         Self {
-            cur: Cell::new(0.0),
+            cur: Cell::new(default),
             receiver: receiver,
         }
     }
 }
 
-impl Pot<f32> for StdinPot {
+impl Pot<f32> for StdinPot<f32> {
     fn read(&self) -> f32 {
         match self.receiver.try_recv() {
             Ok(val) => {
