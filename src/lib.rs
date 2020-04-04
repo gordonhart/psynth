@@ -1,9 +1,11 @@
+pub mod music;
 pub mod generators;
 pub mod filters;
 pub mod consumers;
 pub mod observers;
 pub mod controls;
 pub mod sampling;
+pub mod keys;
 
 
 /// Audio out value at a given instant.
