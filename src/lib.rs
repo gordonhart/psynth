@@ -6,6 +6,7 @@ pub mod observers;
 pub mod controls;
 pub mod sampling;
 pub mod keys;
+pub mod devices;
 
 
 /// Audio out value at a given instant.
