@@ -12,6 +12,7 @@ use psynth::{
     FilterComposable,
     Sample,
     music::notes,
+    devices,
 };
 
 
@@ -42,8 +43,11 @@ fn main() -> Result<()> {
                 let i_frac = (i as f32) / (rate as f32);
                 if i_frac >= 1.0 { 0.0 } else { (1.0 - i_frac) * (1.0 - i_frac) }
             },
-            ).into_generator())
-        ;
+            ).into_generator()
+                // use PowerMate to control gain
+                // start at 0, min 0, max 1, step by 0.01
+                .compose(filters::gain(devices::griffin::PowerMateUsbPot(0.0, 0.0, 1.0, 0.01)))
+            );
 
     let output_stream = output_device.build_output_stream(
         &config,

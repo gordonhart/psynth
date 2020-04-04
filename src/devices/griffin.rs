@@ -16,13 +16,14 @@ use anyhow::Result;
 use crate::Pot;
 
 /*
-python:
->>> f = open("/dev/input/powermate", "r+b", buffering=0)
+hacking notes
+
+
+quick python 'driver':
+```
+>>> f = open("/dev/input/powermate", "r+b", buffering=0)  # r+ and buffering=0 if we want to write
 >>> while True: print(" ".join("{:02X}".format(x) for x in f.read(24)))
-
-- usually 48-byte chunks are yielded, sometimes 24-byte -- seems safest to read in 24-byte chunks
-  and ignore packets that don't look like an expected 24-byte packet
-
+```
 
 yields input_event from input.h (https://docs.rs/input-linux-sys/0.3.1/input_linux_sys/struct.input_event.html):
 pub struct input_event {
@@ -34,27 +35,29 @@ pub struct input_event {
     pub code: u16,
     pub value: i32,
 }
-== 8 + 8 + 2 + 2 + 4 = 24 ... tada!
-so based on this, we can ignore the first 16 timestamp bytes
+-----> based on this, we can ignore the first 16 timestamp bytes
 
 
-keypress (unreliable -- haven't fully figured out behavior):
-    down:
-        68f5885e00000000713b0a00000000000100000101000000
-    release:
-        85f5885e00000000969d0400000000000100000100000000
+example events:
+    keypress (unreliable):
+        down:
+            10 03 89 5E 00 00 00 00 08 37 0F 00 00 00 00 00 01 00 00 01 01 00 00 00
+        release:
+            11 03 89 5E 00 00 00 00 FD 8A 01 00 00 00 00 00 01 00 00 01 00 00 00 00
 
-rotation:
-    clockwise:
-        e7f5885e0000000004c90700000000000200070001000000
-    counterclockwise:
-        f9f5885e000000009b3e04000000000002000700ffffffff
+    rotation:
+        clockwise:
+            AB 11 89 5E 00 00 00 00 2C 20 0C 00 00 00 00 00 02 00 07 00 01 00 00 00
+        counterclockwise:
+            AB 11 89 5E 00 00 00 00 74 EC 04 00 00 00 00 00 02 00 07 00 FF FF FF FF
 
 
 udev rules derived from https://github.com/stefansundin/powermate-linux:
 
+```
 # root, group rw access, everybody r access
 ACTION=="add", ENV{ID_USB_DRIVER}=="powermate", GROUP="dialout", MODE="0664", SYMLINK+="input/powermate"
+```
 
 place at /etc/udev/rules.d/60-powermate.rules
 add user to dialout: usermod -aG dialout $USER
@@ -89,9 +92,16 @@ impl<T> PowerMateUsbPot<T>
 where
     T: std::ops::Neg<Output = T> + Copy + Send + 'static,
 {
+    /// Length of events yielded by the device.
+    ///
+    /// The actual `input_event` struct is described in the kernel's `input.h`.
     const EVENT_LEN: usize = 24;
 
-    pub fn new<P, I>(device_path: P, start: T, min: T, max: T, inc: T) -> Result<Self>
+    /// Hardcoded path where the device interface will be located if the above `udev` rules are
+    /// properly applied.
+    const DEVICE_PATH: &'static str = "/dev/input/powermate";
+
+    pub fn new<P>(device_path: P, start: T, min: T, max: T, inc: T) -> Result<Self>
     where
         P: AsRef<Path>,
     {

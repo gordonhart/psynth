@@ -1,5 +1,3 @@
-#![cfg(feature = "hardware")]
-
 use std::cell::RefCell;
 use std::sync::mpsc;
 use std::thread;
