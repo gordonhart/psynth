@@ -16,6 +16,16 @@ impl Curve<f32> for f32 {
 }
 
 
+impl<F> Curve<f32> for F
+where
+    F: Fn(u64) -> f32,
+{
+    fn read(&self, idx: u64) -> f32 {
+        (self)(idx)
+    }
+}
+
+
 pub struct SimpleKey<T, P, C1, C2>
 where
     T: SampleTrack + Send,
@@ -25,7 +35,7 @@ where
 {
     track: RefCell<T>,
     activate: P, // is the key pressed?
-    velocity: C1, // curve describing ramp up after press
+    attack: C1, // curve describing ramp up after press
     sustain: C2, // curve describing dropoff after release
     n_since_activated: Cell<u64>,
     n_since_deactivated: Cell<u64>,
@@ -38,23 +48,29 @@ where
     C1: Curve<f32> + Send + 'static,
     C2: Curve<f32> + Send + 'static,
 {
-    pub fn new(track: T, activate: P, velocity: C1, sustain: C2) -> Self {
+    pub fn new(track: T, activate: P, attack: C1, sustain: C2) -> Self {
         Self {
             track: RefCell::new(track),
             activate,
-            velocity,
+            attack,
             sustain,
             n_since_activated: Cell::new(0),
             n_since_deactivated: Cell::new(0),
         }
     }
 
+    /// Transform into a `Generator` (consuming).
     pub fn into_generator(self) -> Generator {
         Box::new(move || self.read())
     }
 }
 
 
+/// For maximum compatibility, a `SimpleKey` _could_ be used as a `Pot` input to some other
+/// component.
+///
+/// However, it is expected that a `SimpleKey` will usually be used as a `Generator` via
+/// `into_generator`.
 impl<T, P, C1, C2> Pot<f32> for SimpleKey<T, P, C1, C2>
 where
     T: SampleTrack + Send,
@@ -80,7 +96,7 @@ where
 
         if is_active {
             self.n_since_activated.set(n_since_activated_prev + 1);
-            next_sample * self.velocity.read(n_since_activated_prev)
+            next_sample * self.attack.read(n_since_activated_prev)
         } else {
             self.n_since_deactivated.set(n_since_deactivated_prev + 1);
             next_sample * self.sustain.read(n_since_deactivated_prev)

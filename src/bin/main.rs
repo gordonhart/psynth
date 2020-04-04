@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
+#[allow(unused_imports)]
 use psynth::{
     generators,
     filters,
@@ -10,8 +11,8 @@ use psynth::{
     Consumer,
     FilterComposable,
     Sample,
+    music::notes,
 };
-use psynth::music::notes;
 
 
 fn main() -> Result<()> {
@@ -84,9 +85,17 @@ fn main() -> Result<()> {
     */
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(psynth::keys::SimpleKey::new(
-            generators::sine(rate, 440.0),
+            generators::sine(rate, notes::Hz::from(notes::Tone::try_from("F#3")?)),
             controls::StdinPot::new("bool", false, |l| Ok(l.parse::<bool>()?)),
-            1.0, 0.0).into_generator())
+            move |i| {
+                let i_frac = (i as f32) / (rate as f32);
+                if i_frac >= 1.0 { 1.0 } else { i_frac * i_frac }
+            },
+            move |i| {
+                let i_frac = (i as f32) / (rate as f32);
+                if i_frac >= 1.0 { 0.0 } else { (1.0 - i_frac) * (1.0 - i_frac) }
+            },
+            ).into_generator())
         ;
 
     /*
