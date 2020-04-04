@@ -46,10 +46,54 @@ fn main() -> Result<()> {
                 .compose(filters::gain(0.25)),
             ]));
     */
+    /*
+    let f: Sample = 220.0;
+    let mut consumer = consumers::MonoConsumer::new(channels)
+        .bind(
+            controls::join2(controls::StdinPot::default(),
+                // even harmonics
+                controls::join(vec![
+                    generators::sine(rate, f)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.5)),
+                    generators::sine(rate, f * 2.0)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.05)),
+                    generators::sine(rate, f * 4.0)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.005)),
+                ]),
+                // odd harmonics
+                controls::join(vec![
+                    generators::sine(rate, f)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.5)),
+                    generators::sine(rate, f * 1.5)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.05)),
+                    generators::sine(rate, f * 3.0)
+                        .compose(filters::ramp_up(rate, 0.05))
+                        .compose(filters::gain(0.005)),
+                ]),
+            )
+            // .compose(filters::gain(controls::StdinPot::default()))
+            .compose(filters::gain(0.5))
+            // .compose(filters::reverb(rate, 0.0, 0.0))
+            // .compose(filters::gain(0.25))
+            );
+    */
+    let mut consumer = consumers::MonoConsumer::new(channels)
+        .bind(psynth::keys::SimpleKey::new(
+            generators::sine(rate, 440.0),
+            controls::StdinPot::new("bool", false, |l| Ok(l.parse::<bool>()?)),
+            1.0, 0.0).into_generator())
+        ;
 
+    /*
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(generators::sine(rate, controls::StdinPot::new("tone", notes::Tone::FIXED_HZ,
             |line| Ok(notes::Hz::from(notes::Tone::try_from(line)?)))));
+    */
 
     let output_stream = output_device.build_output_stream(
         &config,

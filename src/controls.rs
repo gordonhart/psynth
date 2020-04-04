@@ -106,8 +106,11 @@ where
     }
 }
 
-impl Pot<f32> for StdinPot<f32> {
-    fn read(&self) -> f32 {
+impl<T> Pot<T> for StdinPot<T>
+where
+    T: Send + Copy + 'static,
+{
+    fn read(&self) -> T {
         match self.receiver.try_recv() {
             Ok(val) => {
                 self.cur.set(val);

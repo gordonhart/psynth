@@ -52,14 +52,15 @@ impl Note {
 impl TryFrom<char> for Note {
     type Error = anyhow::Error;
     fn try_from(c: char) -> Result<Self, Self::Error> {
+        use Note::*;
         match c {
-            'A' => Ok(Note::A),
-            'B' => Ok(Note::B),
-            'C' => Ok(Note::C),
-            'D' => Ok(Note::D),
-            'E' => Ok(Note::E),
-            'F' => Ok(Note::F),
-            'G' => Ok(Note::G),
+            'A' => Ok(A),
+            'B' => Ok(B),
+            'C' => Ok(C),
+            'D' => Ok(D),
+            'E' => Ok(E),
+            'F' => Ok(F),
+            'G' => Ok(G),
             _ => Err(anyhow!("unable to create Note from '{}'", c)),
         }
     }
