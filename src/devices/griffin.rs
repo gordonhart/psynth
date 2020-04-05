@@ -88,7 +88,9 @@ worked on a full Linux machine, did not work out-of-the-box on the TX2
         - recompiled the kernel (with the `.config` addition: `CONFIG_INPUT_POWERMATE=y` which was
           previously commented out) following the wonderful instructions from jetsonhacks:
           https://www.jetsonhacks.com/2017/03/25/build-kernel-and-modules-nvidia-jetson-tx2/
-        - rebooted, and...
+        - rebooted, and... success! good to have run through these paces now -- will need to do
+          something similar to get other hardware running whose drivers are not included in the
+          default install
 */
 
 

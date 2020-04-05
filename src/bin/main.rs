@@ -47,7 +47,9 @@ fn main() -> Result<()> {
                 // use PowerMate to control gain
                 // start at 0, min 0, max 1, step by 0.01
                 .compose(filters::gain(devices::griffin::PowerMateUsbPot::new(0.0, 0.0, 1.0, 0.01)?))
-            );
+        )
+        // .bind_observers(vec![Box::new(std::io::stdout())])
+        ;
 
     let output_stream = output_device.build_output_stream(
         &config,
