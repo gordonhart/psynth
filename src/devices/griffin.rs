@@ -76,6 +76,19 @@ emits EV_REL on rotation
 
 
 -----> choosing to ignore keypresses and only use it as a rotary encoder
+
+
+worked on a full Linux machine, did not work out-of-the-box on the TX2
+    - was not being properly identified as an input device and mounted in `/dev/input`
+    - shows up fine via `lsusb`, exists in `/sys/devices/` and `/dev/bus/usb`
+    - kernel logs are fine up until we would expect to see messages from `input` (then followed by
+      `usbcore`, `powermate`, `hidraw`, `usbhid` messages)
+    - pretty sure that the requisite kernel module (`powermate` and maybe some of its dependencies)
+      were not included in the lightweight kernel that came pre-flashed on the board from Nvidia
+        - recompiled the kernel (with the `.config` addition: `CONFIG_INPUT_POWERMATE=y` which was
+          previously commented out) following the wonderful instructions from jetsonhacks:
+          https://www.jetsonhacks.com/2017/03/25/build-kernel-and-modules-nvidia-jetson-tx2/
+        - rebooted, and...
 */
 
 
