@@ -4,7 +4,7 @@ use std::thread;
 
 use anyhow::Result;
 
-use crate::{generators, filters, Pot, Generator, FilterComposable};
+use crate::{generator, filter, Pot, Generator, FilterComposable};
 
 
 /// Allow for the usage of raw floats as `f32` potentiometers when control over the value is not
@@ -65,10 +65,10 @@ where
     P: Pot<f32> + 'static
 {
     GeneratorPot::new(
-        generators::sine(sample_rate, frequency)
-            .compose(filters::offset(1.0))
-            .compose(filters::gain((high - low) / 2.0))
-            .compose(filters::offset(low)))
+        generator::sine(sample_rate, frequency)
+            .compose(filter::offset(1.0))
+            .compose(filter::gain((high - low) / 2.0))
+            .compose(filter::offset(low)))
 }
 
 

@@ -1,11 +1,11 @@
-use crate::{generators, filters, Pot, Generator};
+use crate::{generator, filter, Pot, Generator};
 use crate::control::mux;
 
 
 /// Fork the provided `Generator` into two entangled `Generator`s that will yield the same value
 /// on each at any given instant.
 pub fn fork(generator: Generator) -> (Generator, Generator) {
-    mux::mux2(move |l, _| (l, l), generator, generators::silence())
+    mux::mux2(move |l, _| (l, l), generator, generator::silence())
 }
 
 
@@ -32,7 +32,7 @@ pub fn join2<P>(bias: P, mut left: Generator, mut right: Generator) -> Generator
 where
     P: Pot<f32> + 'static,
 {
-    let mut clipper = filters::clip(-1.0, 1.0);
+    let mut clipper = filter::clip(-1.0, 1.0);
     Box::new(move || {
         let l_val = left();
         let r_val = right();

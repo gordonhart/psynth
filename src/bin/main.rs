@@ -3,9 +3,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 #[allow(unused_imports)]
 use psynth::{
-    generators,
-    filters,
-    consumers,
+    generator,
+    filter,
+    consumer,
     Pot,
     control,
     sampling,
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         ;
     */
 
-    let mut consumer = consumers::MonoConsumer::new(channels)
+    let mut consumer = consumer::MonoConsumer::new(channels)
         .bind(
             // generators::sine(rate, controls::StdinPot::default())
             /*
@@ -76,14 +76,14 @@ fn main() -> Result<()> {
             )
             */
             control::flow::join(vec![
-                generators::sine(rate, 220.0),
-                generators::sine(rate, 440.0),
-                generators::sine(rate, 660.0),
-                generators::sine(rate, 880.0),
-                generators::sine(rate, 1100.0),
+                generator::sine(rate, 220.0),
+                generator::sine(rate, 440.0),
+                generator::sine(rate, 660.0),
+                generator::sine(rate, 880.0),
+                generator::sine(rate, 1100.0),
             ])
-                .compose(filters::band_pass(rate, control::pot::sine_pot(rate, 1.0, 440.0, 880.0), 80.0))
-                .compose(filters::gain(0.1))
+                .compose(filter::band_pass(rate, control::pot::sine_pot(rate, 1.0, 440.0, 880.0), 80.0))
+                .compose(filter::gain(0.1))
         )
         // .bind_observers(vec![Box::new(std::io::stdout())])
         ;
