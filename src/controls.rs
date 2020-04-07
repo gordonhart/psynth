@@ -1,5 +1,5 @@
 use std::cell::{RefCell, Cell};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 
 use anyhow::Result;
@@ -11,6 +11,13 @@ use crate::{generators, filters, Pot, Generator, FilterComposable, Sample};
 /// necessary.
 impl Pot<f32> for f32 {
     fn read(&self) -> f32 {
+        *self
+    }
+}
+
+
+impl Pot<f64> for f64 {
+    fn read(&self) -> f64 {
         *self
     }
 }
@@ -57,14 +64,23 @@ where
 /// Interactively read values from stdin via `readline`.
 pub struct StdinPot<T> {
     cur: Cell<T>,
-    receiver: std::sync::mpsc::Receiver<T>,
+    receiver: mpsc::Receiver<T>,
 }
+
 
 impl Default for StdinPot<f32> {
     fn default() -> Self {
         Self::new("f32pot", 0.0, |line| Ok(line.parse::<f32>()?))
     }
 }
+
+
+impl Default for StdinPot<f64> {
+    fn default() -> Self {
+        Self::new("f64pot", 0.0, |line| Ok(line.parse::<f64>()?))
+    }
+}
+
 
 impl<T> StdinPot<T>
 where
@@ -77,7 +93,7 @@ where
     {
         let prompt = format!("{}> ", name);
         let mut reader = rustyline::Editor::<()>::new();
-        let (sender, receiver) = std::sync::mpsc::channel();
+        let (sender, receiver) = mpsc::channel();
         thread::spawn(move || loop {
             match reader.readline(prompt.as_str()) {
                 Ok(l) if l == "q" => {
@@ -106,6 +122,7 @@ where
     }
 }
 
+
 impl<T> Pot<T> for StdinPot<T>
 where
     T: Send + Copy + 'static,
@@ -118,6 +135,30 @@ where
             },
             Err(_) => self.cur.get(),
         }
+    }
+}
+
+
+/// Enables sharing of a `Pot` impl in multiple places.
+impl<T, P> Pot<T> for Arc<Mutex<P>>
+where
+    T: Send + Copy + 'static,
+    P: Pot<T> + 'static,
+{
+    fn read(&self) -> T {
+        let inner = self.lock().unwrap();
+        (*inner).read()
+    }
+}
+
+
+impl<T, F> Pot<T> for F
+where
+    T: Send + Copy + 'static,
+    F: Fn() -> T + Send + 'static,
+{
+    fn read(&self) -> T {
+        (self)()
     }
 }
 

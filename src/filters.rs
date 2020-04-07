@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::f32::consts::PI;
+use std::sync::{Arc, Mutex};
 
 use crate::{Sample, Filter, Generator, Pot};
 
@@ -197,4 +198,185 @@ where
     P: Pot<Sample> + 'static,
 {
     Box::new(move |sample: Sample| sample + offset_pot.read())
+}
+
+
+/// Apply a recursive filter as described in Chapter 19 of
+/// [_The Scientist and Engineer's Guide to Digital Signal Processing_](https://www.analog.com/media/en/technical-documentation/dsp-book/dsp_book_Ch19.pdf).
+///
+/// This is somewhat painful to work with with real `Pot`s. When actual dynamic `Pot`
+/// implementations are going to be used, look into using `recursive_helper` (private).
+pub fn recursive(
+    a_coeffs: Vec<Box<dyn Pot<f64>>>,
+    b_coeffs: Vec<Box<dyn Pot<f64>>>,
+) -> Filter {
+    let mut recurse = recursive_helper(a_coeffs.len(), b_coeffs.len());
+    Box::new(move |sample: Sample| {
+        let a_coeffs_real = a_coeffs.iter().map(|a| a.read()).collect::<Vec<f64>>();
+        let b_coeffs_real = b_coeffs.iter().map(|b| b.read()).collect::<Vec<f64>>();
+        recurse(sample, a_coeffs_real.as_slice(), b_coeffs_real.as_slice())
+    })
+}
+
+
+// less difficult to work with than `recursive` for dynamic pots, but serves the same function
+fn recursive_helper(
+    a_coeffs_len: usize,
+    b_coeffs_len: usize,
+) -> impl FnMut(Sample, &[f64], &[f64]) -> Sample
+{
+    let mut samples: VecDeque<f64> = VecDeque::from(vec![0.0; a_coeffs_len]);
+    let mut outputs: VecDeque<f64> = VecDeque::from(vec![0.0; b_coeffs_len]);
+    move |sample: Sample, a_coeffs: &[f64], b_coeffs: &[f64]| {
+        samples.pop_back();
+        samples.push_front(sample.into());
+        let output = {
+            let a_sum = samples.iter().zip(a_coeffs.iter()).fold(0.0, |acc, (s, a)| acc + (s * a));
+            let b_sum = outputs.iter().zip(b_coeffs.iter()).fold(0.0, |acc, (o, b)| acc + (o * b));
+            a_sum + b_sum
+        };
+        outputs.pop_back();
+        outputs.push_front(output);
+        output as f32
+    }
+}
+
+
+/// Single-pole low-pass RC filter as described by Equation 19-2.
+///
+/// The value for `x` should be on `[0,1]`.
+pub fn single_pole_low_pass<P>(x: P) -> Filter
+where
+    P: Pot<f64> + 'static,
+{
+    let mut recurse = recursive_helper(1, 1);
+    Box::new(move |sample: Sample| {
+        let this_x = x.read();
+        recurse(sample, &[1.0 - this_x], &[this_x])
+    })
+}
+
+
+/// Single-pole low-pass RC filter as described by Equation 19-3.
+///
+/// The value for `x` should be on `[0,1]`.
+pub fn single_pole_high_pass<P>(x: P) -> Filter
+where
+    P: Pot<f64> + 'static,
+{
+    let mut recurse = recursive_helper(2, 1);
+    Box::new(move |sample: Sample| {
+        let this_x = x.read();
+        recurse(
+            sample,
+            &[(1.0 + this_x) / 2.0, - (1.0 + this_x) / 2.0],
+            &[this_x],
+        )
+    })
+}
+
+
+/// Four single-pole low-pass filters stacked in series to achieve a more ideal low-pass effect.
+/// Equation 19-6 in the book. The value for`x` should be on `[0,1]`.
+pub fn four_stage_low_pass<P>(x: P) -> Filter
+where
+    P: Pot<f64> + 'static,
+{
+    let x_arc = Arc::new(Mutex::new(x));
+    let mut fs: Vec<Filter> = (0..4).map(|_| single_pole_low_pass(x_arc.clone())).collect();
+    Box::new(move |sample: Sample| fs.iter_mut().fold(sample, |acc, f| f(acc)))
+}
+
+
+// internal helper function to generate r,k from f,bw as used by band_pass and notch filters
+fn r_and_k_from_f_and_bw(f: f64, bw: f64) -> (f64, f64) {
+    let pix2 = std::f64::consts::PI * 2.0;
+    let r = 1.0 - 3.0 * bw;
+    let k = {
+        let numer = 1.0 - (2.0 * r * (pix2 * f).cos()) + r.powi(2);
+        let denom = 2.0 - 2.0 * (pix2 * f).cos();
+        numer / denom
+    };
+    (r, k)
+}
+
+/// Band pass filter that passes frequencies near the `center_frequency` falling off sharply
+/// outside of the `band_width`.
+///
+/// Implementation of [Equation 19-7](https://www.analog.com/media/en/technical-documentation/dsp-book/dsp_book_Ch19.pdf).
+///
+/// Note that values for `center_frequency` near zero cause numerical instability.
+pub fn band_pass<P1, P2>(
+    sample_rate: u32,
+    center_frequency: P1,
+    band_width: P2,
+) -> Filter
+where
+    P1: Pot<f64> + 'static,
+    P2: Pot<f64> + 'static,
+{
+    let mut recurse = recursive_helper(3, 2);
+    let pix2 = std::f64::consts::PI * 2.0;
+    Box::new(move |sample: Sample| {
+        let f_frac = center_frequency.read() / (sample_rate as f64);
+        let bw_frac = band_width.read() / (sample_rate as f64);
+        let (r, k) = r_and_k_from_f_and_bw(f_frac, bw_frac);
+        recurse(
+            sample,
+            &[
+                1.0 - k,
+                2.0 * (k - r) * (pix2 * f_frac).cos(),
+                r.powi(2) - k,
+            ],
+            &[
+                2.0 * r * (pix2 * f_frac).cos(),
+                - r.powi(2),
+            ],
+        )
+    })
+}
+
+
+/// The opposite of `band_pass`, `notch` passes all but those frequencies near `center_frequency`
+/// and within the `band_width`.
+///
+/// Described by equation 19-8 in the book.
+pub fn notch<P1, P2>(
+    sample_rate: u32,
+    center_frequency: P1,
+    band_width: P2,
+) -> Filter
+where
+    P1: Pot<f64> + 'static,
+    P2: Pot<f64> + 'static,
+{
+    let mut recurse = recursive_helper(3, 2);
+    let pix2 = std::f64::consts::PI * 2.0;
+    Box::new(move |sample: Sample| {
+        let f_frac = center_frequency.read() / (sample_rate as f64);
+        let bw_frac = band_width.read() / (sample_rate as f64);
+        let (r, k) = r_and_k_from_f_and_bw(f_frac, bw_frac);
+        recurse(
+            sample,
+            &[
+                k,
+                - 2.0 * k * (pix2 * f_frac).cos(),
+                k,
+            ],
+            &[
+                2.0 * r * (pix2 * f_frac).cos(),
+                - r.powi(2),
+            ],
+        )
+    })
+}
+
+
+// TODO: https://www.dsprelated.com/freebooks/filters/Elementary_Audio_Digital_Filters.html
+// https://www.analog.com/media/en/technical-documentation/dsp-book/dsp_book_Ch19.pdf
+pub fn equalizer<F>(_eq_function: F) -> Filter
+where
+    F: Fn(f32) -> f32 + 'static,
+{
+    unimplemented!()
 }
