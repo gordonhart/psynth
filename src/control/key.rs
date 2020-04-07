@@ -1,3 +1,5 @@
+//! Use a button as input to trigger a sound.
+
 use std::cell::{Cell, RefCell};
 
 use crate::{Pot, Generator};
@@ -11,6 +13,7 @@ pub trait Curve<T> {
 }
 
 
+/// Constant `f32` value `Curve`.
 impl Curve<f32> for f32 {
     fn read(&self, _: u64) -> f32 {
         *self
@@ -18,6 +21,15 @@ impl Curve<f32> for f32 {
 }
 
 
+/// Constant `f64` value `Curve`.
+impl Curve<f64> for f64 {
+    fn read(&self, _: u64) -> f64 {
+        *self
+    }
+}
+
+
+/// Use a closure as a `Curve`.
 impl<F> Curve<f32> for F
 where
     F: Fn(u64) -> f32,
@@ -28,14 +40,14 @@ where
 }
 
 
-/// Device representing a real-world 'key' (or button) on a machine.
+/// Device representing a real-world button on a machine.
 ///
 /// Holds:
 ///   - The `SampleTrack` it uses to produce sound
 ///   - A `Pot<bool>` indicating if the switch is open or closed
 ///   - An attack `Curve<f32>` defining the activation ramp-up behavior when switched on
 ///   - A sustain `Curve<f32>` defining the deactivation ramp-down behavior when switched off
-pub struct SimpleKey<T, P, C1, C2>
+pub struct SimpleButton<T, P, C1, C2>
 where
     T: SampleTrack + Send,
     P: Pot<bool> + Send,
@@ -51,7 +63,7 @@ where
 }
 
 
-impl<T, P, C1, C2> SimpleKey<T, P, C1, C2>
+impl<T, P, C1, C2> SimpleButton<T, P, C1, C2>
 where
     T: SampleTrack + Send + 'static,
     P: Pot<bool> + Send + 'static,
@@ -76,12 +88,12 @@ where
 }
 
 
-/// For maximum compatibility, a `SimpleKey` _could_ be used as a `Pot` input to some other
+/// For maximum compatibility, a `SimpleButton` _could_ be used as a `Pot` input to some other
 /// component.
 ///
-/// However, it is expected that a `SimpleKey` will usually be used as a `Generator` via
+/// However, it is expected that a `SimpleButton` will usually be used as a `Generator` via
 /// `into_generator`.
-impl<T, P, C1, C2> Pot<f32> for SimpleKey<T, P, C1, C2>
+impl<T, P, C1, C2> Pot<f32> for SimpleButton<T, P, C1, C2>
 where
     T: SampleTrack + Send,
     P: Pot<bool> + Send,

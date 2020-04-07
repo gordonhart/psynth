@@ -1,3 +1,5 @@
+//! Flow control and composition functions.
+
 use crate::{generator, filter, Pot, Generator};
 use crate::control::mux;
 

@@ -1,4 +1,4 @@
-//! Control the audio out via inputs, branching, and many other means.
+//! Control the audio out via inputs, branching, and other means.
 // TODO: better docstring
 
 pub mod pot;
