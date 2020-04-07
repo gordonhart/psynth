@@ -257,7 +257,7 @@ where
 }
 
 
-/// Single-pole low-pass RC filter as described by Equation 19-3.
+/// Single-pole high-pass RC filter as described by Equation 19-3.
 ///
 /// The value for `x` should be on `[0,1]`.
 pub fn single_pole_high_pass<P>(x: P) -> Filter
@@ -277,6 +277,7 @@ where
 
 
 /// Four single-pole low-pass filters stacked in series to achieve a more ideal low-pass effect.
+///
 /// Equation 19-6 in the book. The value for`x` should be on `[0,1]`.
 pub fn four_stage_low_pass<P>(x: P) -> Filter
 where
@@ -299,6 +300,7 @@ fn r_and_k_from_f_and_bw(f: f64, bw: f64) -> (f64, f64) {
     };
     (r, k)
 }
+
 
 /// Band pass filter that passes frequencies near the `center_frequency` falling off sharply
 /// outside of the `band_width`.

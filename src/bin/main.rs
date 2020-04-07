@@ -7,7 +7,7 @@ use psynth::{
     filters,
     consumers,
     Pot,
-    controls,
+    control,
     sampling,
     Consumer,
     FilterComposable,
@@ -59,12 +59,30 @@ fn main() -> Result<()> {
     let mut consumer = consumers::MonoConsumer::new(channels)
         .bind(
             // generators::sine(rate, controls::StdinPot::default())
+            /*
             generators::sine(rate, 880.0)
                 // .compose(filters::single_pole_low_pass(controls::StdinPot::default()))
                 // .compose(filters::single_pole_high_pass(controls::StdinPot::default()))
                 // .compose(filters::four_stage_low_pass(controls::StdinPot::default()))
                 // .compose(filters::band_pass(rate, 440.0, 10.0))
-                .compose(filters::band_pass(rate, controls::StdinPot::new("(0,inf)", 100.0, |line| Ok(line.parse::<f64>()?)), 100.0))
+                // .compose(filters::band_pass(rate, controls::StdinPot::new("(0,inf)", 100.0, |line| Ok(line.parse::<f64>()?)), 100.0))
+                .compose(filters::band_pass(rate, controls::sine_pot(rate, 1.0, 440.0, 880.0), 50.0))
+                */
+            /*
+            controls::join2(
+                0.0,
+                generators::sine(rate, 880.0),
+                generators::sine(rate, 440.0),
+            )
+            */
+            control::flow::join(vec![
+                generators::sine(rate, 220.0),
+                generators::sine(rate, 440.0),
+                generators::sine(rate, 660.0),
+                generators::sine(rate, 880.0),
+                generators::sine(rate, 1100.0),
+            ])
+                .compose(filters::band_pass(rate, control::pot::sine_pot(rate, 1.0, 440.0, 880.0), 80.0))
                 .compose(filters::gain(0.1))
         )
         // .bind_observers(vec![Box::new(std::io::stdout())])
