@@ -28,9 +28,3 @@ Here lives the hardware half of `psynth`.
       manual
 - GPIO pinout is identical to Raspberry PI, can use HATs made for the latter
     - Main I2C bus exposed via these headers is bus 1 at `/dev/i2c-1`
-
-- Getting the DAC hat running:
-    - Install `device-tree-compiler` for `fdtdump`:
-    ```
-    # fdtdump /boot/dtb/tegra186-quill-p3310-1000-c03-00-base.dtb
-    ```
