@@ -1,5 +1,7 @@
 # JustBoom DAC on Jetson TX2
 
+Not quite working yet.
+
 Product: [JustBoom DAC HAT for Raspberry PI](https://shop.justboom.co/products/justboom-dac-hat)
 
 ## Development

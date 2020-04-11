@@ -23,7 +23,7 @@
     }
     ```
 
-    Based on this, we can ignore the first 16 timestamp bytes.
+    - Based on this, we can ignore the first 16 timestamp bytes
 
 - Example events:
 
@@ -73,8 +73,8 @@
       `usbcore`, `powermate`, `hidraw`, `usbhid` messages)
     - Pretty sure that the requisite kernel module (`powermate` and maybe some of its dependencies)
       were not included in the lightweight kernel that came pre-flashed on the board from Nvidia
-        - Recompiled the kernel (with the `.config` addition: `CONFIG_INPUT_POWERMATE=y` which was
-          previously commented out) following the
+        - Recompiled the kernel (with the `/usr/src/kernel/kernel-4.4/.config` addition:
+          `CONFIG_INPUT_POWERMATE=y` which was previously commented out) following the
           [wonderful instructions from jetsonhacks](https://www.jetsonhacks.com/2017/03/25/build-kernel-and-modules-nvidia-jetson-tx2)
         - Rebooted, and... success! good to have run through these paces now -- will need to do
           something similar to get other hardware running whose drivers are not included in the
