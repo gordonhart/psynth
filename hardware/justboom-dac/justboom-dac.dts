@@ -1,0 +1,64 @@
+/dts-v1/;
+// magic:		0xd00dfeed
+// totalsize:		0x4fc (1276)
+// off_dt_struct:	0x38
+// off_dt_strings:	0x444
+// off_mem_rsvmap:	0x28
+// version:		17
+// last_comp_version:	16
+// boot_cpuid_phys:	0x0
+// size_dt_strings:	0xb8
+// size_dt_struct:	0x40c
+
+/ {
+    compatible = "brcm,bcm2835";
+    fragment@0 {
+        target = <0xffffffff>;
+        __overlay__ {
+            status = "okay";
+        };
+    };
+    fragment@1 {
+        target = <0xffffffff>;
+        __overlay__ {
+            #address-cells = <0x00000001>;
+            #size-cells = <0x00000000>;
+            status = "okay";
+            pcm5122@4d {
+                #sound-dai-cells = <0x00000000>;
+                compatible = "ti,pcm5122";
+                reg = <0x0000004d>;
+                AVDD-supply = <0xffffffff>;
+                DVDD-supply = <0xffffffff>;
+                CPVDD-supply = <0xffffffff>;
+                status = "okay";
+            };
+        };
+    };
+    fragment@2 {
+        target = <0xffffffff>;
+        __overlay__ {
+            compatible = "justboom,justboom-dac";
+            i2s-controller = <0xffffffff>;
+            status = "okay";
+            phandle = <0x00000001>;
+        };
+    };
+    __overrides__ {
+        24db_digital_gain = <0x00000001 0x625f6469 0x00000002 0x735f5f00 0x2f667261 0x65726c61 0x5f5f6669 0x0000003e>;
+    };
+    __symbols__ {
+        frag2 = "/fragment@2/__overlay__";
+    };
+    __fixups__ {
+        i2s = "/fragment@0:target:0", "/fragment@2/__overlay__:i2s-controller:0";
+        i2c1 = "/fragment@1:target:0";
+        vdd_3v3_reg = "/fragment@1/__overlay__/pcm5122@4d:AVDD-supply:0", "/fragment@1/__overlay__/pcm5122@4d:DVDD-supply:0", "/fragment@1/__overlay__/pcm5122@4d:CPVDD-supply:0";
+        sound = "/fragment@2:target:0";
+    };
+    __local_fixups__ {
+        __overrides__ {
+            24db_digital_gain = <0x00000000>;
+        };
+    };
+};
