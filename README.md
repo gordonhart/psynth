@@ -5,6 +5,18 @@ Digital synthesizer project for personal entertainment and education.
 
 ## Development
 
+### Dependencies
+
+On top of those listed in the cargo manifest, the following system packages are required (exact
+package name will depend on your distro):
+
+- `pkg-config`
+- `libzmq` ≥ 4.1
+- `alsa` if compiling on Linux (see `cpal` docs for more details)
+
+Hardware device drivers are gated behind the `hardware` feature flag and will only work on Linux.
+
+
 ### TODOs
 
 - [ ] Generalize stream pattern to N-channel audio
@@ -33,13 +45,3 @@ Digital synthesizer project for personal entertainment and education.
       preferable to code littered with `<'a>` explicit lifetimes
 - [ ] Implement some form of CLI for `psynth-play` such that doing new things doesn't always
   involve modifying the `bin/main.rs` and recompiling
-
-
-### Dependencies
-
-On top of those listed in the cargo manifest, the following system packages are required (exact
-package name will depend on your distro):
-
-- `pkg-config`
-- `libzmq` ≥ 4.1
-- `alsa` (see `cpal` docs for more details)
