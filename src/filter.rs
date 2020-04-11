@@ -1,3 +1,5 @@
+//! Waveform `Filter` implementations.
+
 use std::collections::VecDeque;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};

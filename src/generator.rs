@@ -1,3 +1,5 @@
+//! Waveform `Generator` implementations.
+
 use std::f32::consts::PI;
 use std::sync::mpsc;
 use std::thread;
