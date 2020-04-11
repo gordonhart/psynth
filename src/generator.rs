@@ -1,3 +1,5 @@
+//! Waveform `Generator` implementations.
+
 use std::f32::consts::PI;
 use std::sync::mpsc;
 use std::thread;
@@ -46,6 +48,11 @@ pub fn sawtooth(sample_rate: u32, frequency: f32) -> Generator {
     })
 }
 
+
+/// White noise.
+pub fn white() -> Generator {
+    Box::new(|| rand::random::<f32>() * 2.0 - 1.0)
+}
 
 /// Play back the provided `track` once per beat at the requested `bpm`.
 ///

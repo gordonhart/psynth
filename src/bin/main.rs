@@ -3,15 +3,17 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 #[allow(unused_imports)]
 use psynth::{
-    generators,
-    filters,
-    consumers,
-    controls,
+    generator,
+    filter,
+    consumer,
+    Pot,
+    control,
     sampling,
     Consumer,
     FilterComposable,
     Sample,
     music::notes,
+    // devices,
 };
 
 
@@ -28,22 +30,12 @@ fn main() -> Result<()> {
     let channels = config.channels as usize;
     let rate: u32 = config.sample_rate.0;
 
-    // demonstrate a key reading `true`/`false` values from stdin, with hardcoded attack and
-    // sustain functions that ramp by t^2
-    let mut consumer = consumers::MonoConsumer::new(channels)
-        .bind(psynth::keys::SimpleKey::new(
-            generators::sine(rate, notes::Hz::from(notes::Tone::try_from("F#3")?)),
-            controls::StdinPot::new("bool", false, |l| Ok(l.parse::<bool>()?)),
-            move |i| {
-                let i_frac = (i as f32) / (rate as f32);
-                if i_frac >= 1.0 { 1.0 } else { i_frac * i_frac }
-            },
-            move |i| {
-                let i_frac = (i as f32) / (rate as f32);
-                if i_frac >= 1.0 { 0.0 } else { (1.0 - i_frac) * (1.0 - i_frac) }
-            },
-            ).into_generator())
-        ;
+    let (l, r) = control::mux::balance(
+        control::pot::sine_pot(rate, 4.0, -1.0, 1.0),
+        generator::sine(rate, 440.0).compose(filter::gain(0.1)),
+        generator::sine(rate, 330.0).compose(filter::gain(0.1)),
+    );
+    let mut consumer = consumer::StereoConsumer::new(channels).bind(l, r);
 
     let output_stream = output_device.build_output_stream(
         &config,

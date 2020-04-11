@@ -1,11 +1,11 @@
 pub mod music;
-pub mod generators;
-pub mod filters;
-pub mod consumers;
-pub mod observers;
-pub mod controls;
+pub mod generator;
+pub mod filter;
+pub mod consumer;
+pub mod observer;
+pub mod control;
 pub mod sampling;
-pub mod keys;
+pub mod device;
 
 
 /// Audio out value at a given instant.
@@ -84,14 +84,14 @@ pub trait FilterComposable {
 
 impl FilterComposable for Generator {
     fn compose(self, filter: Filter) -> Generator {
-        filters::compose(self, filter)
+        filter::compose(self, filter)
     }
 
     fn fork<F>(self, mut join_function: F) -> Generator
     where
         F: FnMut(Generator, Generator) -> Generator + Send,
     {
-        let (left_gen, right_gen) = controls::fork(self);
+        let (left_gen, right_gen) = control::flow::fork(self);
         join_function(left_gen, right_gen)
     }
 }

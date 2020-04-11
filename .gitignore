@@ -5,3 +5,6 @@
 # rust artifacts
 /target
 **/*.rs.bk
+
+# audio files
+*.wav

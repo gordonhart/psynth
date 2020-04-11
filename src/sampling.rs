@@ -1,3 +1,5 @@
+//! Predetermined waveforms for repeated playback.
+
 use std::path::Path;
 
 use anyhow::{anyhow, Result};

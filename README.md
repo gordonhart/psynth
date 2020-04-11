@@ -1,10 +1,23 @@
-# psynth
+# `psynth`
 
 Digital synthesizer project for personal entertainment and education.
 
+
 ## Development
 
-TODOs:
+### Dependencies
+
+On top of those listed in the cargo manifest, the following system packages are required (exact
+package name will depend on your distro):
+
+- `pkg-config`
+- `libzmq` ≥ 4.1
+- `alsa` if compiling on Linux (see `cpal` docs for more details)
+
+Hardware device drivers are gated behind the `hardware` feature flag and will only work on Linux.
+
+
+### TODOs
 
 - [ ] Generalize stream pattern to N-channel audio
     - [x] Implement `StereoConsumer`
