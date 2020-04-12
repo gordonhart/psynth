@@ -9,8 +9,8 @@ Product: [JustBoom DAC HAT for Raspberry PI](https://shop.justboom.co/products/j
 Install `device-tree-compiler` for `fdtdump`, `dtc` other useful programs.
 
 Unpack the `.dtbo` compiled device tree overlay for the JustBoom DAC on the RPi
-([raspberrypi/firmware source](https://github.com/raspberrypi/firmware/blob/master/boot/overlays/justboom-dac.dtbo)
-to plaintext:
+([raspberrypi/firmware source](https://github.com/raspberrypi/firmware/blob/master/boot/overlays/justboom-dac.dtbo))
+to plaintext (currently located at `./justboom-dac.dts`):
 
 ```bash
 $ fdtdump justboom-dac.dtbo
@@ -36,3 +36,5 @@ Alternatively:
   sort of re-flashing will be requried to update the compiled+signed `.dtb`
     - If this is the case, might as well update to latest L4T version
       ([32.3.1](https://developer.nvidia.com/embedded/linux-tegra))
+- Developer forum: [Using I2S on Jetson TX2](https://forums.developer.nvidia.com/t/using-i2s-in-jetson-tx2/63242/2)
+- L4T guide on [Configuring the 40-pin Expansion Header](https://docs.nvidia.com/jetson/l4t/index.html#page/Tegra%2520Linux%2520Driver%2520Package%2520Development%2520Guide%2Fhw_setup_jetson_io.html%23)
