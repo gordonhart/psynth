@@ -28,3 +28,18 @@ Here lives the hardware half of `psynth`.
       manual
 - GPIO pinout is identical to Raspberry PI, can use HATs made for the latter
     - Main I2C bus exposed via these headers is bus 1 at `/dev/i2c-1`
+
+### Setting up the Host Machine
+
+- Download Nvidia SDK manager
+- Install (on Ubuntu 18.04 machine) ~(on Debian machine, should work fine)~ **<<does not work fine**, no downloads available
+  unless the OS matches "Ubuntu {16,18}.04", sigh
+- Launch (requires X), login and jump through auth hoops
+
+### Shaving the Yak, Jetson Edition
+
+1. Find a spare computer and install Ubuntu 18.04 on it (the "host" computer).
+2. Install Nvidia SDK manager on the host machine.
+3. Install JetPack on host machine via SDK manager.
+4. Update Jetson TX2 with latest L4T release (was 28.2.1, now 32.3.1).
+5. ...
